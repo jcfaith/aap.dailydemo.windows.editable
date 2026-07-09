@@ -1,6 +1,11 @@
 Ansible Automation Platform Daily Demo for Windows — Editable RITM
 =========
-A demo showcasing AAP + ServiceNow ITSM integration with a **multi-option Service Catalog Item** and an **edit-before-approval** workflow. Customers submit a catalog item choosing their datacenter (AWS region), instance type, Windows version, VM name, environment, and more. An approver can correct any field on the RITM before approving — AAP reads the final saved values at runtime, so provisioning always reflects what was approved, not just what was originally requested.
+
+## Overview
+
+This demo shows end-to-end IT automation between Red Hat Ansible Automation Platform (AAP) and ServiceNow (SNOW). A user submits a **Windows VM Provisioning** Service Catalog Item in ServiceNow, choosing their datacenter (AWS region), instance type, Windows version, VM name, environment, and contact email. That request creates a RITM (Requested Item) and routes it to an approver. The approver can **edit any catalog variable directly on the RITM** before approving — fixing a wrong region, instance type, or VM name is as simple as updating the field and clicking Approve. Once approved, SNOW automatically triggers the AAP workflow via a REST call. AAP reads whatever values the approver saved, provisions the VPC and EC2 Windows instance in the correct AWS region, registers the VM in the CMDB, optionally sets up a web server, applies patches, and closes the RITM with a summary of what was built.
+
+To replicate this demo in your own environment you need: an AAP instance with access to AWS credentials, a ServiceNow developer or sandbox instance, and an AWS account. Start by syncing this project in AAP, running the Day 0 setup playbook (`setup_demo.yml`) to create all job templates and the workflow, then follow the [ServiceNow Catalog Item Setup Guide](docs/snow_catalog_item_setup.md) to create the catalog item, variables, approval business rules, and the outbound REST message that fires the AAP workflow on approval.
 
 New in this version
 =========
