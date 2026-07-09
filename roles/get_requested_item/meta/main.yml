@@ -1,0 +1,14 @@
+---
+galaxy_info:
+  role_name: get_requested_item
+  author: jcfaith
+  description: Reads ServiceNow RITM catalog item variables and shares them with AAP workflow nodes
+  license: GPL-2.0-or-later
+  min_ansible_version: "2.9"
+  platforms:
+    - name: all
+  galaxy_tags:
+    - servicenow
+    - itsm
+    - aap
+dependencies: []

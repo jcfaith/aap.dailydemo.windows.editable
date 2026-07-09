@@ -1,11 +1,22 @@
 ---
 controller_templates:
+
+  - name: DDW - Get Requested Item
+    job_type: run
+    inventory: AAP Managed Inventory
+    organization: "{{ my_organization }}"
+    execution_environment: Default execution environment
+    project: aap.dailydemo.windows.editable
+    playbook: playbooks/servicenow/get_requested_item.yml
+    credentials:
+      - ServiceNow ITSM Credential
+
   - name: Delete Daily Demo Windows
     job_type: run
     inventory: AAP Managed Inventory
     organization: "{{ my_organization }}"
     execution_environment: amazon_aws_ee
-    project: aap.dailydemo.windows
+    project: aap.dailydemo.windows.editable
     playbook: playbooks/site_delete.yml
     ask_tags_on_launch: false
     job_tags: remove
@@ -20,7 +31,7 @@ controller_templates:
     inventory: AAP Managed Inventory
     organization: "{{ my_organization }}"
     execution_environment: amazon_aws_ee
-    project: aap.dailydemo.windows
+    project: aap.dailydemo.windows.editable
     playbook: playbooks/01_create_vpc.yml
     job_tags: create
     credentials:
@@ -32,7 +43,7 @@ controller_templates:
     inventory: AAP Managed Inventory
     organization: "{{ my_organization }}"
     execution_environment: amazon_aws_ee
-    project: aap.dailydemo.windows
+    project: aap.dailydemo.windows.editable
     playbook: playbooks/02_create_instance.yml
     job_tags: create
     credentials:
@@ -46,7 +57,7 @@ controller_templates:
     inventory: AAP Managed Inventory
     organization: "{{ my_organization }}"
     execution_environment: Default execution environment
-    project: aap.dailydemo.windows
+    project: aap.dailydemo.windows.editable
     playbook: playbooks/servicenow/incident_create.yml
     credentials:
       - ServiceNow ITSM Credential
@@ -56,7 +67,7 @@ controller_templates:
     inventory: AAP Managed Inventory
     organization: "{{ my_organization }}"
     execution_environment: amazon_aws_ee
-    project: aap.dailydemo.windows
+    project: aap.dailydemo.windows.editable
     playbook: playbooks/04_get_instance_info.yml
     credentials:
       - "{{ my_aws_credential }}"
@@ -68,7 +79,7 @@ controller_templates:
     inventory: AAP Managed Inventory
     organization: "{{ my_organization }}"
     execution_environment: amazon_aws_ee
-    project: aap.dailydemo.windows
+    project: aap.dailydemo.windows.editable
     playbook: playbooks/03_create_inventory.yml
     job_tags: create
     credentials:
@@ -80,7 +91,7 @@ controller_templates:
     inventory: AAP Managed Inventory
     organization: "{{ my_organization }}"
     execution_environment: Default execution environment
-    project: aap.dailydemo.windows
+    project: aap.dailydemo.windows.editable
     playbook: playbooks/06_website_setup.yml
     credentials:
       - Daily Demo Windows
@@ -90,12 +101,15 @@ controller_templates:
     inventory: AAP Managed Inventory
     organization: "{{ my_organization }}"
     execution_environment: Default execution environment
-    project: aap.dailydemo.windows
+    project: aap.dailydemo.windows.editable
     playbook: playbooks/servicenow/update_sn_req_itm.yml
     credentials:
       - ServiceNow ITSM Credential
     extra_vars:
-      update_requested_item_comments: !unsafe "Provisioning details\n
+      update_requested_item_comments: !unsafe "Provisioning complete!\n
+                                              Datacenter (Region): {{ vm_region }}\n
+                                              Machine Name: {{ vm_name }}\n
+                                              Instance Type: {{ vm_instance_type }}\n
                                               Machine Create Time: {{ vm_machine_create_time }}\n
                                               Public DNS Name: {{ my_server }}\n
                                               Public IP Address: {{ my_public_ip }}\n
@@ -110,7 +124,7 @@ controller_templates:
     inventory: AAP Managed Inventory
     organization: "{{ my_organization }}"
     execution_environment: Default execution environment
-    project: aap.dailydemo.windows
+    project: aap.dailydemo.windows.editable
     playbook: playbooks/servicenow/update_sn_req_itm.yml
     credentials:
       - ServiceNow ITSM Credential
@@ -126,7 +140,7 @@ controller_templates:
     inventory: AAP Managed Inventory
     organization: "{{ my_organization }}"
     execution_environment: Default execution environment
-    project: aap.dailydemo.windows
+    project: aap.dailydemo.windows.editable
     playbook: playbooks/06_windows_account_create.yml
     credentials:
       - Daily Demo Windows
@@ -149,7 +163,7 @@ controller_templates:
     inventory: AAP Managed Inventory
     organization: "{{ my_organization }}"
     execution_environment: windows workshop execution environment
-    project: aap.dailydemo.windows
+    project: aap.dailydemo.windows.editable
     playbook: playbooks/05_powershell_improve.yml
     credentials:
       - Daily Demo Windows
@@ -159,7 +173,7 @@ controller_templates:
     inventory: AAP Managed Inventory
     organization: "{{ my_organization }}"
     execution_environment: windows workshop execution environment
-    project: aap.dailydemo.windows
+    project: aap.dailydemo.windows.editable
     playbook: playbooks/07_windows_patching.yml
     credentials:
       - Daily Demo Windows
@@ -169,7 +183,7 @@ controller_templates:
     inventory: AAP Managed Inventory
     organization: "{{ my_organization }}"
     execution_environment: Default execution environment
-    project: aap.dailydemo.windows
+    project: aap.dailydemo.windows.editable
     playbook: playbooks/servicenow/create_ci.yml
     credentials:
       - ServiceNow ITSM Credential
@@ -181,7 +195,7 @@ controller_templates:
     inventory: AAP Managed Inventory
     organization: "{{ my_organization }}"
     execution_environment: Default execution environment
-    project: aap.dailydemo.windows
+    project: aap.dailydemo.windows.editable
     playbook: playbooks/servicenow/create_cmdb_relationship.yml
     credentials:
       - ServiceNow ITSM Credential
@@ -191,7 +205,7 @@ controller_templates:
     inventory: AAP Managed Inventory
     organization: "{{ my_organization }}"
     execution_environment: windows workshop execution environment
-    project: aap.dailydemo.windows
+    project: aap.dailydemo.windows.editable
     playbook: playbooks/auditme.yml
     credentials:
       - Daily Demo Windows
@@ -201,7 +215,7 @@ controller_templates:
     inventory: AAP Managed Inventory
     organization: "{{ my_organization }}"
     execution_environment: windows workshop execution environment
-    project: aap.dailydemo.windows
+    project: aap.dailydemo.windows.editable
     playbook: playbooks/07_windows_patching.yml
     credentials:
       - Daily Demo Windows
@@ -245,7 +259,7 @@ controller_templates:
     inventory: AAP Managed Inventory
     organization: "{{ my_organization }}"
     execution_environment: windows workshop execution environment
-    project: aap.dailydemo.windows
+    project: aap.dailydemo.windows.editable
     playbook: playbooks/smb_server.yml
     job_tags: check
     credentials:
@@ -256,7 +270,7 @@ controller_templates:
     inventory: AAP Managed Inventory
     organization: "{{ my_organization }}"
     execution_environment: windows workshop execution environment
-    project: aap.dailydemo.windows
+    project: aap.dailydemo.windows.editable
     playbook: playbooks/smb_server.yml
     job_tags: disable
     credentials:
@@ -267,7 +281,7 @@ controller_templates:
     inventory: AAP Managed Inventory
     organization: "{{ my_organization }}"
     execution_environment: windows workshop execution environment
-    project: aap.dailydemo.windows
+    project: aap.dailydemo.windows.editable
     playbook: playbooks/dot_net_patch_report.yml
     credentials:
       - Daily Demo Windows
@@ -277,7 +291,7 @@ controller_templates:
     inventory: AAP Managed Inventory
     organization: "{{ my_organization }}"
     execution_environment: windows workshop execution environment
-    project: aap.dailydemo.windows
+    project: aap.dailydemo.windows.editable
     playbook: playbooks/update_IMDSv2.yml
     credentials:
       - Daily Demo Windows

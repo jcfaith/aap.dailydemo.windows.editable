@@ -1,0 +1,48 @@
+---
+- name: Retrieve requested item from ServiceNow
+  tags:
+    - always
+  block:
+
+    - name: Look up RITM by ticket number
+      register: ritm_result
+      servicenow.itsm.api_info:
+        resource: sc_req_item
+        sysparm_query: "numberSTARTSWITH{{ ticket_number }}"
+        sysparm_fields: "sys_id,number,state,request_state,short_description"
+
+    - name: Fail if RITM not found
+      ansible.builtin.assert:
+        that:
+          - ritm_result.record | length > 0
+        fail_msg: "RITM {{ ticket_number }} not found in ServiceNow"
+
+    - name: Get catalog item variables for RITM
+      register: variables_result
+      servicenow.itsm.api_info:
+        resource: sc_item_option_mtom
+        sysparm_query: "request_item={{ ritm_result.record[0].sys_id }}"
+        sysparm_fields: "sc_item_option.item_option_new.name,sc_item_option.value"
+
+    - name: Build variables dict from catalog item options
+      ansible.builtin.set_fact:
+        ritm_variables: >-
+          {{ ritm_variables | default({}) | combine({
+            item['sc_item_option.item_option_new.name']: item['sc_item_option.value']
+          }) }}
+      loop: "{{ variables_result.record }}"
+
+    - name: Debug parsed catalog variables
+      ansible.builtin.debug:
+        var: ritm_variables
+
+    - name: Share RITM variables with downstream workflow nodes
+      ansible.builtin.set_stats:
+        data:
+          vm_region: "{{ ritm_variables.get('datacenter', get_requested_item_default_region) }}"
+          vm_name: "{{ ritm_variables.get('vm_name', get_requested_item_default_vm_name) }}"
+          vm_instance_type: "{{ ritm_variables.get('instance_type', get_requested_item_default_instance_type) }}"
+          vm_environment_tag: "{{ ritm_variables.get('environment', get_requested_item_default_environment) }}"
+          vm_image: "{{ get_requested_item_ami_map[ritm_variables.get('windows_version', get_requested_item_default_windows_version)][ritm_variables.get('datacenter', get_requested_item_default_region)] }}"
+          vm_my_email_address: "{{ ritm_variables.get('contact_email', get_requested_item_default_email) }}"
+          include_website_setup: "{{ ritm_variables.get('include_website', 'yes') }}"

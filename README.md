@@ -1,6 +1,16 @@
-Ansible Automation Platform Daily Demo for Windows
+Ansible Automation Platform Daily Demo for Windows — Editable RITM
 =========
-A demo designed to showcase many of the use cases that people are looking for.  We are using the workflow visualizer to show how the various building blocks are put together and enable the delivery on demand of a custom website.  The playbooks call roles, the roles allow for ease of sharing the code and also allow for documentation of the various things needed in each role. The demo is designed to be integrated with an IT Service Management (ITSM) system.  Everything will be documented in ITSM system via the skillfull use of automation.  Check out the video below to see that "the art of the possible."
+A demo showcasing AAP + ServiceNow ITSM integration with a **multi-option Service Catalog Item** and an **edit-before-approval** workflow. Customers submit a catalog item choosing their datacenter (AWS region), instance type, Windows version, VM name, environment, and more. An approver can correct any field on the RITM before approving — AAP reads the final saved values at runtime, so provisioning always reflects what was approved, not just what was originally requested.
+
+New in this version
+=========
+- `DDW - Get Requested Item` — first workflow node; reads all catalog item variables from the SNOW RITM via `sc_item_option_mtom`
+- Region/datacenter selector drives `vm_region` for VPC + EC2 provisioning
+- Windows version selector drives AMI lookup per region
+- Instance type, VM name, environment, contact email, website toggle — all from catalog item
+- Edit-before-approval: approver edits RITM fields in SNOW before approving; AAP picks up the corrected values
+
+[ServiceNow Catalog Item Setup Guide](docs/snow_catalog_item_setup.md)
 
 Notes
 =========

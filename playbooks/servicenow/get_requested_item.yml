@@ -1,0 +1,7 @@
+---
+- name: Get requested item variables from ServiceNow
+  hosts: localhost
+
+  roles:
+
+    - role: get_requested_item

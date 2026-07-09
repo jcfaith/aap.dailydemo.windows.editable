@@ -7,6 +7,18 @@ controller_workflows:
       ticket_number: "RITM0010386"
     related:
       workflow_nodes:
+
+      # Step 1: Read catalog item variables from SNOW RITM (enables edit-before-approval)
+      -   identifier: DDW - Get Requested Item
+          related:
+            success_nodes:
+            -   identifier: DDW - Network Create
+          unified_job_template:
+              name: DDW - Get Requested Item
+              organization:
+                name: "{{ my_organization }}"
+              type: job_template
+
       -   identifier: DDW - Network Create
           related:
             success_nodes:
@@ -16,6 +28,7 @@ controller_workflows:
               organization:
                 name: "{{ my_organization }}"
               type: job_template
+
       -   identifier: DDW - VM Create
           related:
             success_nodes:
@@ -27,6 +40,7 @@ controller_workflows:
             organization:
               name: "{{ my_organization }}"
             type: job_template
+
       -   identifier: DDW - Inventory Update
           related:
             success_nodes:
@@ -36,21 +50,24 @@ controller_workflows:
             organization:
               name: "{{ my_organization }}"
             type: job_template
+
       -   identifier: DDW - Create Incident
           related:
             always_nodes:
-            -   identifier:  DDW - Update request ticket - failure
+            -   identifier: DDW - Update request ticket - failure
           unified_job_template:
             name: DDW - Create Incident
             organization:
               name: "{{ my_organization }}"
             type: job_template
+
       -   identifier: DDW - Update request ticket - failure
           unified_job_template:
             name: DDW - Update request ticket - failure
             organization:
               name: "{{ my_organization }}"
             type: job_template
+
       -   identifier: DDW - Get Instance Info
           related:
             success_nodes:
@@ -61,6 +78,7 @@ controller_workflows:
             organization:
               name: "{{ my_organization }}"
             type: job_template
+
       -   identifier: DDW - Create a CMDB record
           related:
             success_nodes:
@@ -70,12 +88,14 @@ controller_workflows:
             organization:
               name: "{{ my_organization }}"
             type: job_template
+
       -   identifier: DDW - Create CMDB relationship
           unified_job_template:
             name: DDW - Create CMDB relationship
             organization:
               name: "{{ my_organization }}"
             type: job_template
+
       -   identifier: DDW - Powershell Improvement
           related:
             success_nodes:
@@ -86,6 +106,7 @@ controller_workflows:
             organization:
               name: "{{ my_organization }}"
             type: job_template
+
       -   identifier: DDW - Website Setup
           related:
             success_nodes:
@@ -95,6 +116,7 @@ controller_workflows:
             organization:
               name: "{{ my_organization }}"
             type: job_template
+
       -   identifier: DDW - Provision Access
           related:
             success_nodes:
@@ -104,6 +126,7 @@ controller_workflows:
             organization:
               name: "{{ my_organization }}"
             type: job_template
+
       -   identifier: DDW - Patching
           related:
             always_nodes:
@@ -113,6 +136,7 @@ controller_workflows:
             organization:
               name: "{{ my_organization }}"
             type: job_template
+
       -   identifier: DDW - Update request ticket - success
           unified_job_template:
             name: DDW - Update request ticket - success
