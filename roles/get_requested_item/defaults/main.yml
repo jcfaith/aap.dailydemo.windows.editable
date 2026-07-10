@@ -10,15 +10,15 @@ get_requested_item_default_windows_version: "2022"
 # Update these to match your AWS account's current AMIs
 get_requested_item_ami_map:
   "2022":
-    us-east-1: ami-0f9c44e98edf38a2b      # Windows Server 2022 Base - N. Virginia
-    us-west-2: ami-0d081196e3df05f4d      # Windows Server 2022 Base - Oregon
-    eu-west-1: ami-0b45ae66668865cd8      # Windows Server 2022 Base - Ireland
-    ap-southeast-1: ami-0df7a207adb9748c7  # Windows Server 2022 Base - Singapore
+    us-east-1: ami-0ab5e8edee718de14      # Windows Server 2022 Base - N. Virginia (2026.06.10)
+    us-west-2: ami-0b5d53857b130a211      # Windows Server 2022 Base - Oregon (2026.06.10)
+    eu-west-1: ami-07cb8e6aaec6a39a7      # Windows Server 2022 Base - Ireland (2026.06.10)
+    ap-southeast-1: ami-0aa15eda8b6bee073  # Windows Server 2022 Base - Singapore (2026.06.10)
   "2019":
-    us-east-1: ami-0c2b0d3fb02824d92      # Windows Server 2019 Base - N. Virginia
-    us-west-2: ami-09a8e5ab51342d7b5      # Windows Server 2019 Base - Oregon
-    eu-west-1: ami-0a50a55f636f2e8df      # Windows Server 2019 Base - Ireland
-    ap-southeast-1: ami-0e57f16e4f1fefb3f  # Windows Server 2019 Base - Singapore
+    us-east-1: ami-048608096265638fd      # Windows Server 2019 Base - N. Virginia (2026.06.10)
+    us-west-2: ami-0b01fae281582ac4c      # Windows Server 2019 Base - Oregon (2026.06.10)
+    eu-west-1: ami-07d1c484398ae5190      # Windows Server 2019 Base - Ireland (2026.06.10)
+    ap-southeast-1: ami-0954c3988c8bb93a5  # Windows Server 2019 Base - Singapore (2026.06.10)
 
 #
 # Variable set at the workflow template level (passed as extra_var)
