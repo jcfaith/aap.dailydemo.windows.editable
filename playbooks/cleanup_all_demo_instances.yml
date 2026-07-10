@@ -1,0 +1,150 @@
+---
+- name: Cleanup all Windows Daily Demo AWS resources across all regions
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    cleanup_regions:
+      - us-east-1
+      - us-west-2
+      - eu-west-1
+      - ap-southeast-1
+    demo_env_tag: windows-dailydemo
+    demo_vpc_name: windows-dailydemo_service.ansible
+    demo_vpc_cidr: 172.16.2.0/24
+    demo_secgrp_name: windows-dailydemo_SECGRP
+    demo_rt_name: windows-dailydemo_RT_Internet
+
+  tasks:
+
+    - name: Find all running demo instances per region
+      loop: "{{ cleanup_regions }}"
+      loop_control:
+        label: "{{ item }}"
+      register: all_instances
+      amazon.aws.ec2_instance_info:
+        region: "{{ item }}"
+        filters:
+          tag:Environment: "{{ demo_env_tag }}"
+          instance-state-name: [running, stopped]
+
+    - name: Terminate demo instances
+      loop: "{{ all_instances.results }}"
+      loop_control:
+        label: "{{ outer.item }} ({{ outer.instances | length }} instances)"
+        loop_var: outer
+      when: outer.instances | length > 0
+      amazon.aws.ec2_instance:
+        region: "{{ outer.item }}"
+        state: absent
+        instance_ids: "{{ outer.instances | map(attribute='instance_id') | list }}"
+        wait: true
+
+    - name: Wait for instances to terminate before removing VPC resources
+      loop: "{{ all_instances.results }}"
+      loop_control:
+        label: "{{ outer.item }}"
+        loop_var: outer
+      when: outer.instances | length > 0
+      amazon.aws.ec2_instance_info:
+        region: "{{ outer.item }}"
+        instance_ids: "{{ outer.instances | map(attribute='instance_id') | list }}"
+        filters:
+          instance-state-name: [terminated]
+      register: termination_check
+      until: termination_check.instances | length == outer.instances | length
+      retries: 20
+      delay: 15
+
+    - name: Look up demo VPCs per region
+      loop: "{{ cleanup_regions }}"
+      loop_control:
+        label: "{{ item }}"
+      register: all_vpcs
+      amazon.aws.ec2_vpc_net_info:
+        region: "{{ item }}"
+        filters:
+          "tag:Name": "{{ demo_vpc_name }}"
+
+    - name: Remove Internet Gateways
+      loop: "{{ all_vpcs.results }}"
+      loop_control:
+        label: "{{ outer.item }}"
+        loop_var: outer
+      when: outer.vpcs | length > 0
+      amazon.aws.ec2_vpc_igw:
+        region: "{{ outer.item }}"
+        vpc_id: "{{ outer.vpcs[0].vpc_id }}"
+        state: absent
+
+    - name: Remove subnets
+      loop: "{{ all_vpcs.results }}"
+      loop_control:
+        label: "{{ outer.item }}"
+        loop_var: outer
+      when: outer.vpcs | length > 0
+      amazon.aws.ec2_vpc_subnet:
+        region: "{{ outer.item }}"
+        vpc_id: "{{ outer.vpcs[0].vpc_id }}"
+        cidr: "{{ demo_vpc_cidr }}"
+        state: absent
+
+    - name: Gather route tables per region
+      loop: "{{ all_vpcs.results }}"
+      loop_control:
+        label: "{{ outer.item }}"
+        loop_var: outer
+      when: outer.vpcs | length > 0
+      register: all_rts
+      amazon.aws.ec2_vpc_route_table_info:
+        region: "{{ outer.item }}"
+        filters:
+          "tag:Name": "{{ demo_rt_name }}"
+          vpc-id: "{{ outer.vpcs[0].vpc_id }}"
+
+    - name: Remove route tables
+      loop: "{{ all_rts.results }}"
+      loop_control:
+        label: "{{ outer.item }}"
+        loop_var: outer
+      when:
+        - outer.route_tables is defined
+        - outer.route_tables | length > 0
+      amazon.aws.ec2_vpc_route_table:
+        region: "{{ outer.item }}"
+        vpc_id: "{{ outer.route_tables[0].vpc_id }}"
+        route_table_id: "{{ outer.route_tables[0].id }}"
+        lookup: id
+        state: absent
+
+    - name: Remove security groups
+      loop: "{{ all_vpcs.results }}"
+      loop_control:
+        label: "{{ outer.item }}"
+        loop_var: outer
+      when: outer.vpcs | length > 0
+      amazon.aws.ec2_security_group:
+        region: "{{ outer.item }}"
+        name: "{{ demo_secgrp_name }}"
+        vpc_id: "{{ outer.vpcs[0].vpc_id }}"
+        state: absent
+
+    - name: Remove VPCs
+      loop: "{{ all_vpcs.results }}"
+      loop_control:
+        label: "{{ outer.item }}"
+        loop_var: outer
+      when: outer.vpcs | length > 0
+      amazon.aws.ec2_vpc_net:
+        region: "{{ outer.item }}"
+        vpc_id: "{{ outer.vpcs[0].vpc_id }}"
+        state: absent
+
+    - name: Report what was cleaned up
+      loop: "{{ all_instances.results }}"
+      loop_control:
+        label: "{{ outer.item }}"
+        loop_var: outer
+      ansible.builtin.debug:
+        msg: "{{ outer.item }}: terminated {{ outer.instances | length }} instance(s)"
