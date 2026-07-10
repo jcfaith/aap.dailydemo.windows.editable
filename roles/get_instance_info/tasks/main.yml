@@ -1,11 +1,18 @@
 ---
+- name: Debug lookup variables
+  ansible.builtin.debug:
+    msg: "Looking for vm_name={{ vm_name }} in region={{ vpc_region }}"
+
 - name: Get instances id with tag
   register: instance_info
+  until: instance_info.instances | length > 0
+  retries: 6
+  delay: 10
   amazon.aws.ec2_instance_info:
     region: "{{ vpc_region }}"
     filters:
-      "tag:Name": "{{ vm_name }}"
-      instance-state-name: ["running"]
+      tag:Name: "{{ vm_name }}"
+      instance-state-name: [running]
 
 - name: Printing out instance_info.instances[0].instance_id
   when: instance_info.instances[0].instance_id is defined
