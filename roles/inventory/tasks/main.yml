@@ -4,7 +4,6 @@
     - always
   block:
 
-    # fail with good error for Automation controller user
     - name: Determine that both AAP and Machine credentials are set
       ansible.builtin.assert:
         that:
@@ -15,15 +14,39 @@
           - "Red Hat Ansible Automation Platform credential is not set"
           - "Please assign correct credentials to the Job Template"
 
-    - name: Create a new token
-      ansible.platform.token:
-        aap_hostname: "{{ lookup('ansible.builtin.env', 'CONTROLLER_HOST') }}"
-        aap_username: "{{ lookup('ansible.builtin.env', 'CONTROLLER_USERNAME') }}"
-        aap_password: "{{ lookup('ansible.builtin.env', 'CONTROLLER_PASSWORD') }}"
-        aap_validate_certs: false
-        description: Windows Inventory
-        scope: write
-        state: present
+    - name: Create a new AAP token
+      register: aap_token_response
+      no_log: true
+      ansible.builtin.uri:
+        url: "{{ lookup('ansible.builtin.env', 'CONTROLLER_HOST') }}/api/controller/v2/tokens/"
+        method: POST
+        url_username: "{{ lookup('ansible.builtin.env', 'CONTROLLER_USERNAME') }}"
+        url_password: "{{ lookup('ansible.builtin.env', 'CONTROLLER_PASSWORD') }}"
+        force_basic_auth: true
+        validate_certs: false
+        body_format: json
+        body:
+          description: Windows Inventory
+          scope: write
+        status_code: [200, 201]
+
+    - name: Set token facts
+      ansible.builtin.set_fact:
+        aap_token_value: "{{ aap_token_response.json.token }}"
+        aap_token_id: "{{ aap_token_response.json.id }}"
+
+    - name: Get inventory ID
+      register: inventory_response
+      ansible.builtin.uri:
+        url: "{{ lookup('ansible.builtin.env', 'CONTROLLER_HOST') }}/api/controller/v2/inventories/?name={{ inventory_name | urlencode }}"
+        method: GET
+        headers:
+          Authorization: "Bearer {{ aap_token_value }}"
+        validate_certs: false
+
+    - name: Set inventory ID fact
+      ansible.builtin.set_fact:
+        aap_inventory_id: "{{ inventory_response.json.results[0].id }}"
 
 - name: Adding our new vm to our inventory
   tags:
@@ -38,35 +61,66 @@
           tag:Name: "{{ vm_name }}"
           instance-state-name: [running]
 
-    - name: Update the AAP Managed Inventory
+    - name: Add or update host in AAP inventory
       loop: "{{ instance_info['instances'] }}"
-      ansible.controller.host:
-        controller_host: "{{ lookup('ansible.builtin.env', 'CONTROLLER_HOST') }}"
-        controller_oauthtoken: "{{ ansible_facts['aap_token']['token'] }}"
+      register: host_response
+      ansible.builtin.uri:
+        url: "{{ lookup('ansible.builtin.env', 'CONTROLLER_HOST') }}/api/controller/v2/hosts/"
+        method: POST
+        headers:
+          Authorization: "Bearer {{ aap_token_value }}"
         validate_certs: false
-        name: "{{ item['public_dns_name'] }}"
-        inventory: "{{ inventory_name }}"
-        state: present
-        enabled: true
+        body_format: json
+        body:
+          name: "{{ item['public_dns_name'] }}"
+          inventory: "{{ aap_inventory_id }}"
+          enabled: true
+        status_code: [200, 201, 400]
 
-    - name: Create a group
-      loop: "{{ instance_info['instances'] }}"
-      ansible.controller.group:
-        controller_host: "{{ lookup('ansible.builtin.env', 'CONTROLLER_HOST') }}"
-        controller_oauthtoken: "{{ ansible_facts['aap_token']['token'] }}"
+    - name: Create or update windemo group with winrm variables
+      register: group_response
+      ansible.builtin.uri:
+        url: "{{ lookup('ansible.builtin.env', 'CONTROLLER_HOST') }}/api/controller/v2/groups/"
+        method: POST
+        headers:
+          Authorization: "Bearer {{ aap_token_value }}"
         validate_certs: false
-        name: windemo
-        description: Automation Controller Group
-        inventory: "{{ inventory_name }}"
-        hosts: "{{ item['public_dns_name'] }}"
-        preserve_existing_hosts: true
-        variables:
-          ansible_connection: winrm
-          ansible_winrm_transport: credssp
-          ansible_winrm_server_cert_validation: ignore
-          ansible_port: 5986
-          ansible_winrm_operation_timeout_sec: 180
-          ansible_winrm_read_timeout_sec: 240
+        body_format: json
+        body:
+          name: windemo
+          description: Automation Controller Group
+          inventory: "{{ aap_inventory_id }}"
+          variables: |
+            ansible_connection: winrm
+            ansible_winrm_transport: credssp
+            ansible_winrm_server_cert_validation: ignore
+            ansible_port: 5986
+            ansible_winrm_operation_timeout_sec: 180
+            ansible_winrm_read_timeout_sec: 240
+        status_code: [200, 201, 400]
+
+    - name: Get windemo group ID
+      register: group_lookup
+      ansible.builtin.uri:
+        url: "{{ lookup('ansible.builtin.env', 'CONTROLLER_HOST') }}/api/controller/v2/groups/?name=windemo&inventory={{ aap_inventory_id }}"
+        method: GET
+        headers:
+          Authorization: "Bearer {{ aap_token_value }}"
+        validate_certs: false
+
+    - name: Add host to windemo group
+      loop: "{{ instance_info['instances'] }}"
+      ansible.builtin.uri:
+        url: "{{ lookup('ansible.builtin.env', 'CONTROLLER_HOST') }}/api/controller/v2/groups/{{ group_lookup.json.results[0].id }}/hosts/"
+        method: POST
+        headers:
+          Authorization: "Bearer {{ aap_token_value }}"
+        validate_certs: false
+        body_format: json
+        body:
+          name: "{{ item['public_dns_name'] }}"
+          inventory: "{{ aap_inventory_id }}"
+        status_code: [200, 201, 204]
 
     - name: Update runtime inventory
       loop: "{{ instance_info['instances'] }}"
@@ -75,34 +129,44 @@
         groups:
           - windemo
 
-    - name: Remove my token
-      ansible.platform.token:
-        aap_hostname: "{{ lookup('ansible.builtin.env', 'CONTROLLER_HOST') }}"
-        existing_token: "{{ ansible_facts['aap_token'] }}"
-        aap_token: "{{ ansible_facts['aap_token']['token'] }}"
-        aap_validate_certs: false
-        state: absent
+    - name: Remove AAP token
+      ansible.builtin.uri:
+        url: "{{ lookup('ansible.builtin.env', 'CONTROLLER_HOST') }}/api/controller/v2/tokens/{{ aap_token_id }}/"
+        method: DELETE
+        headers:
+          Authorization: "Bearer {{ aap_token_value }}"
+        validate_certs: false
+        status_code: [200, 201, 204]
 
 - name: Removing our vm from our inventory
   tags:
     - remove
   block:
 
-    - name: Remove inventory host groups
-      loop:
-        - windemo
-      ansible.controller.group:
-        controller_host: "{{ lookup('ansible.builtin.env', 'CONTROLLER_HOST') }}"
-        controller_oauthtoken: "{{ ansible_facts['aap_token']['token'] }}"
+    - name: Get windemo group ID for removal
+      register: group_lookup_remove
+      ansible.builtin.uri:
+        url: "{{ lookup('ansible.builtin.env', 'CONTROLLER_HOST') }}/api/controller/v2/groups/?name=windemo&inventory={{ aap_inventory_id }}"
+        method: GET
+        headers:
+          Authorization: "Bearer {{ aap_token_value }}"
         validate_certs: false
-        name: "{{ item }}"
-        inventory: "{{ inventory_name }}"
-        state: absent
 
-    - name: Remove my token
-      ansible.platform.token:
-        aap_hostname: "{{ lookup('ansible.builtin.env', 'CONTROLLER_HOST') }}"
-        existing_token: "{{ ansible_facts['aap_token'] }}"
-        aap_token: "{{ ansible_facts['aap_token']['token'] }}"
-        aap_validate_certs: false
-        state: absent
+    - name: Remove inventory host groups
+      when: group_lookup_remove.json.count > 0
+      ansible.builtin.uri:
+        url: "{{ lookup('ansible.builtin.env', 'CONTROLLER_HOST') }}/api/controller/v2/groups/{{ group_lookup_remove.json.results[0].id }}/"
+        method: DELETE
+        headers:
+          Authorization: "Bearer {{ aap_token_value }}"
+        validate_certs: false
+        status_code: [200, 201, 204]
+
+    - name: Remove AAP token
+      ansible.builtin.uri:
+        url: "{{ lookup('ansible.builtin.env', 'CONTROLLER_HOST') }}/api/controller/v2/tokens/{{ aap_token_id }}/"
+        method: DELETE
+        headers:
+          Authorization: "Bearer {{ aap_token_value }}"
+        validate_certs: false
+        status_code: [200, 201, 204]
