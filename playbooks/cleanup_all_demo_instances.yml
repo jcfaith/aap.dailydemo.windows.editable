@@ -18,7 +18,7 @@
 
   tasks:
 
-    - name: Find all running demo instances per region
+    - name: Find all running/stopped demo instances per region
       loop: "{{ cleanup_regions }}"
       loop_control:
         label: "{{ item }}"
@@ -40,22 +40,11 @@
         state: absent
         instance_ids: "{{ outer.instances | map(attribute='instance_id') | list }}"
         wait: true
+        wait_timeout: 300
 
-    - name: Wait for instances to terminate before removing VPC resources
-      loop: "{{ all_instances.results }}"
-      loop_control:
-        label: "{{ outer.item }}"
-        loop_var: outer
-      when: outer.instances | length > 0
-      amazon.aws.ec2_instance_info:
-        region: "{{ outer.item }}"
-        instance_ids: "{{ outer.instances | map(attribute='instance_id') | list }}"
-        filters:
-          instance-state-name: [terminated]
-      register: termination_check
-      until: termination_check.instances | length == outer.instances | length
-      retries: 20
-      delay: 15
+    - name: Pause 30s for AWS to release public IPs after termination
+      ansible.builtin.pause:
+        seconds: 30
 
     - name: Look up demo VPCs per region
       loop: "{{ cleanup_regions }}"
@@ -73,6 +62,10 @@
         label: "{{ outer.item }}"
         loop_var: outer
       when: outer.vpcs | length > 0
+      register: igw_result
+      until: igw_result is not failed
+      retries: 10
+      delay: 15
       amazon.aws.ec2_vpc_igw:
         region: "{{ outer.item }}"
         vpc_id: "{{ outer.vpcs[0].vpc_id }}"
