@@ -45,6 +45,7 @@
     - name: Share RITM variables with downstream workflow nodes
       ansible.builtin.set_stats:
         data:
+          vpc_region: "{{ ritm_variables.get('datacenter', get_requested_item_default_region) }}"
           vm_region: "{{ ritm_variables.get('datacenter', get_requested_item_default_region) }}"
           vm_name: "{{ ritm_variables.get('vm_name', get_requested_item_default_vm_name) }}"
           vm_instance_type: "{{ ritm_variables.get('instance_type', get_requested_item_default_instance_type) }}"
