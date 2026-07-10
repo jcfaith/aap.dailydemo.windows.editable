@@ -10,36 +10,12 @@
       - us-west-2
       - eu-west-1
       - ap-southeast-1
-    demo_env_tag: windows-dailydemo
     demo_vpc_name: windows-dailydemo_service.ansible
     demo_vpc_cidr: 172.16.2.0/24
     demo_secgrp_name: windows-dailydemo_SECGRP
     demo_rt_name: windows-dailydemo_RT_Internet
 
   tasks:
-
-    - name: Find all running/stopped demo instances per region
-      loop: "{{ cleanup_regions }}"
-      register: all_instances
-      amazon.aws.ec2_instance_info:
-        region: "{{ item }}"
-        filters:
-          tag:Environment: "{{ demo_env_tag }}"
-          instance-state-name: [running, stopped]
-
-    - name: Terminate demo instances
-      loop: "{{ all_instances.results }}"
-      when: item.instances | length > 0
-      amazon.aws.ec2_instance:
-        region: "{{ item.item }}"
-        state: absent
-        instance_ids: "{{ item.instances | map(attribute='instance_id') | list }}"
-        wait: true
-        wait_timeout: 300
-
-    - name: Pause 30s for AWS to release resources after termination
-      ansible.builtin.pause:
-        seconds: 30
 
     - name: Look up demo VPCs per region
       loop: "{{ cleanup_regions }}"
@@ -49,7 +25,7 @@
         filters:
           "tag:Name": "{{ demo_vpc_name }}"
 
-    - name: Build list of regions with VPCs
+    - name: Build region-to-vpc-id map
       ansible.builtin.set_fact:
         regions_with_vpcs: >-
           {{ all_vpcs.results
@@ -67,7 +43,30 @@
                    | map(attribute='vpc_id')
                    | list)) }}
 
-    - name: Find ENIs still in demo VPCs
+    - name: Find ALL instances in demo VPCs (any environment tag)
+      loop: "{{ regions_with_vpcs }}"
+      register: all_instances
+      amazon.aws.ec2_instance_info:
+        region: "{{ item }}"
+        filters:
+          vpc-id: "{{ vpc_ids_by_region[item] }}"
+          instance-state-name: [running, stopped, shutting-down, stopping]
+
+    - name: Terminate all instances in demo VPCs
+      loop: "{{ all_instances.results }}"
+      when: item.instances | length > 0
+      amazon.aws.ec2_instance:
+        region: "{{ item.item }}"
+        state: absent
+        instance_ids: "{{ item.instances | map(attribute='instance_id') | list }}"
+        wait: true
+        wait_timeout: 300
+
+    - name: Pause 30s for ENIs and public IPs to be released after termination
+      ansible.builtin.pause:
+        seconds: 30
+
+    - name: Find any remaining ENIs in demo VPCs
       loop: "{{ regions_with_vpcs }}"
       register: all_enis
       amazon.aws.ec2_eni_info:
@@ -85,8 +84,10 @@
       loop: "{{ all_enis.results }}"
       when: item.network_interfaces | length > 0
 
-    - name: Delete stale ENIs to allow IGW detach
+    - name: Delete stale ENIs
       loop: "{{ enis_to_delete | default([]) }}"
+      loop_control:
+        label: "{{ item.id }} in {{ item._region }}"
       amazon.aws.ec2_eni:
         region: "{{ item._region }}"
         eni_id: "{{ item.id }}"
@@ -97,7 +98,7 @@
       loop: "{{ regions_with_vpcs }}"
       register: igw_result
       until: igw_result is not failed
-      retries: 6
+      retries: 8
       delay: 15
       amazon.aws.ec2_vpc_igw:
         region: "{{ item }}"
