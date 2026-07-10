@@ -56,6 +56,38 @@
         filters:
           "tag:Name": "{{ demo_vpc_name }}"
 
+    - name: Find orphaned network interfaces in demo VPCs
+      loop: "{{ all_vpcs.results }}"
+      loop_control:
+        label: "{{ outer.item }}"
+        loop_var: outer
+      when: outer.vpcs | length > 0
+      register: all_enis
+      amazon.aws.ec2_eni_info:
+        region: "{{ outer.item }}"
+        filters:
+          vpc-id: "{{ outer.vpcs[0].vpc_id }}"
+          status: available
+
+    - name: Build flat list of orphaned ENIs to delete
+      ansible.builtin.set_fact:
+        enis_to_delete: "{{ enis_to_delete | default([]) + (outer.network_interfaces | default([]) | map('combine', {'_region': outer.item}) | list) }}"
+      loop: "{{ all_enis.results | default([]) }}"
+      loop_control:
+        label: "{{ outer.item }}"
+        loop_var: outer
+      when: outer.network_interfaces is defined
+
+    - name: Delete orphaned network interfaces (releases their public IPs)
+      loop: "{{ enis_to_delete | default([]) }}"
+      loop_control:
+        label: "{{ item.id }} in {{ item._region }}"
+      amazon.aws.ec2_eni:
+        region: "{{ item._region }}"
+        eni_id: "{{ item.id }}"
+        state: absent
+      ignore_errors: true
+
     - name: Remove Internet Gateways
       loop: "{{ all_vpcs.results }}"
       loop_control:
