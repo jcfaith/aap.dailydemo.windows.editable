@@ -1,0 +1,33 @@
+---
+- name: Diagnose VPC us-east-1
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: EIPs in us-east-1
+      register: eips
+      amazon.aws.ec2_eip_info:
+        region: us-east-1
+        filters:
+          domain: vpc
+    - name: Show EIPs
+      ansible.builtin.debug:
+        var: eips.addresses
+    - name: NAT gateways in us-east-1
+      register: nat
+      amazon.aws.ec2_vpc_nat_gateway_info:
+        region: us-east-1
+        filters:
+          state: [available, pending]
+    - name: Show NAT gateways
+      ansible.builtin.debug:
+        var: nat.result
+    - name: Network interfaces with public IPs
+      register: enis
+      amazon.aws.ec2_eni_info:
+        region: us-east-1
+        filters:
+          vpc-id: vpc-094b426163ce9aa36
+    - name: Show ENIs
+      ansible.builtin.debug:
+        msg: "{{ enis.network_interfaces | map(attribute='association') | select('defined') | list }}"
