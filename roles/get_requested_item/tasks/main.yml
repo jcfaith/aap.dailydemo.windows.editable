@@ -9,7 +9,11 @@
       servicenow.itsm.api_info:
         resource: sc_req_item
         sysparm_query: "numberSTARTSWITH{{ ticket_number }}"
-        sysparm_fields: "sys_id,number,state,request_state,short_description"
+        columns:
+          - sys_id
+          - number
+          - state
+          - short_description
 
     - name: Fail if RITM not found
       ansible.builtin.assert:
@@ -22,7 +26,9 @@
       servicenow.itsm.api_info:
         resource: sc_item_option_mtom
         sysparm_query: "request_item={{ ritm_result.record[0].sys_id }}"
-        sysparm_fields: "sc_item_option.item_option_new.name,sc_item_option.value"
+        columns:
+          - sc_item_option.item_option_new.name
+          - sc_item_option.value
 
     - name: Build variables dict from catalog item options
       ansible.builtin.set_fact:
