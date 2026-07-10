@@ -34,7 +34,7 @@
       ansible.builtin.set_fact:
         ritm_variables: >-
           {{ ritm_variables | default({}) | combine({
-            item['sc_item_option.item_option_new.name']: item['sc_item_option.value']
+            item['sc_item_option.item_option_new.name']: item['sc_item_option.value'] | trim
           }) }}
       loop: "{{ variables_result.record }}"
 
