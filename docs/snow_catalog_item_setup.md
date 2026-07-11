@@ -106,41 +106,82 @@ SaveRitmVariables.prototype = Object.extendsObject(AbstractAjaxProcessor, {
       var vars = JSON.parse(varsJson);
       var varNames = ["datacenter","windows_version","instance_type","vm_name","environment","contact_email","include_website"];
 
-      var changedFields = [];
-      var unchangedFields = [];
+      // Pass 1: read originals
+      var originals = {};
       var mtom = new GlideRecord("sc_item_option_mtom");
       mtom.addQuery("request_item", ritmSysId);
       mtom.query();
       while (mtom.next()) {
         var opt = mtom.sc_item_option.getRefRecord();
         var nm = opt.item_option_new.name.toString();
-        if (vars.hasOwnProperty(nm)) {
-          var orig = opt.value.toString().trim();
-          var updated = vars[nm];
-          if (orig !== updated) {
-            changedFields.push({field: nm, from: orig, to: updated});
-          } else {
-            unchangedFields.push(nm);
-          }
-          opt.setValue("value", updated);
-          opt.update();
+        if (varNames.indexOf(nm) > -1) {
+          originals[nm] = opt.value.toString().trim();
         }
       }
 
+      // Pass 2: write approver's values
+      var mtom2 = new GlideRecord("sc_item_option_mtom");
+      mtom2.addQuery("request_item", ritmSysId);
+      mtom2.query();
+      while (mtom2.next()) {
+        var opt2 = mtom2.sc_item_option.getRefRecord();
+        var nm2 = opt2.item_option_new.name.toString();
+        if (vars.hasOwnProperty(nm2)) {
+          opt2.setValue("value", vars[nm2]);
+          opt2.update();
+        }
+      }
+
+      // Requester info from RITM
+      var ritmGr = new GlideRecord("sc_req_item");
+      ritmGr.get(ritmSysId);
+      var requesterName = ritmGr.requested_for.getDisplayValue();
+      var requesterGr = new GlideRecord("sys_user");
+      requesterGr.get(ritmGr.getValue("requested_for"));
+      var requesterEmail = requesterGr.getValue("email") || "";
+
       var approverName = gs.getUser().getFullName();
-      var approverEmail = gs.getUser().getEmail();
-      var note = "Approval summary - " + approverName + " (" + approverEmail + ")\n\n";
+      var approverEmail = "faith@redhat.com";
+
+      // Track what changed
+      var changedFields = [];
+      var unchangedFields = [];
+      for (var i = 0; i < varNames.length; i++) {
+        var vn = varNames[i];
+        if (originals[vn] !== vars[vn]) {
+          changedFields.push({field: vn, from: originals[vn] || "", to: vars[vn] || ""});
+        } else {
+          unchangedFields.push(vn);
+        }
+      }
+
+      var note = "Approval Summary\n\n";
+      note += "Requester: " + requesterName + " (" + requesterEmail + ")\n";
+      note += "Approver: " + approverName + " (" + approverEmail + ")\n";
+
+      note += "\nOriginal request variables:\n";
+      for (var a = 0; a < varNames.length; a++) {
+        note += "  " + varNames[a] + ": " + (originals[varNames[a]] || "") + "\n";
+      }
+
+      note += "\nApproved variables:\n";
+      for (var b = 0; b < varNames.length; b++) {
+        note += "  " + varNames[b] + ": " + (vars[varNames[b]] || "") + "\n";
+      }
+
       if (changedFields.length > 0) {
-        note += "Variables changed before approval:\n";
-        for (var i = 0; i < changedFields.length; i++) {
-          note += "  " + changedFields[i].field + ": [" + changedFields[i].from + "] -> [" + changedFields[i].to + "]\n";
+        note += "\nVariables changed before approval:\n";
+        for (var c = 0; c < changedFields.length; c++) {
+          note += "  " + changedFields[c].field + ": [" + changedFields[c].from + "] -> [" + changedFields[c].to + "]\n";
         }
       } else {
-        note += "No variables were changed from the original request.\n";
+        note += "\nNo variables were changed from the original request.\n";
       }
+
       if (unchangedFields.length > 0) {
         note += "\nUnchanged: " + unchangedFields.join(", ");
       }
+
       note += "\n\nContact the approver at " + approverEmail + " with any questions.";
 
       var currentUserId = gs.getUserID();
@@ -157,9 +198,8 @@ SaveRitmVariables.prototype = Object.extendsObject(AbstractAjaxProcessor, {
       appr.state = "approved";
       appr.update();
 
-      // Write diff directly to sys_journal_field so setWorkflow(false) below
-      // does not suppress it. Journal fields are not written when setWorkflow(false)
-      // is active on the parent record update.
+      // Insert journal entry directly — setWorkflow(false) below suppresses
+      // journal field processing on the RITM update, so we write here instead.
       var jf = new GlideRecord("sys_journal_field");
       jf.setValue("name", "sc_req_item");
       jf.setValue("element", "work_notes");
