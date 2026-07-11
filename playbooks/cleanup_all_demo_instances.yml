@@ -162,6 +162,7 @@
       loop_control:
         label: "{{ item.name }}"
       when: "'compute.amazonaws.com' in item.name"
+      ignore_errors: true
       ansible.builtin.uri:
         url: "{{ lookup('env', 'CONTROLLER_HOST') }}/api/controller/v2/hosts/{{ item.id }}/"
         method: DELETE
@@ -169,7 +170,7 @@
         url_password: "{{ lookup('env', 'CONTROLLER_PASSWORD') }}"
         force_basic_auth: true
         validate_certs: false
-        status_code: 204
+        status_code: [204, 409]
 
     - name: Summary
       loop: "{{ all_instances.results }}"
