@@ -152,8 +152,9 @@
       ansible.builtin.uri:
         url: "{{ lookup('env', 'CONTROLLER_HOST') }}/api/controller/v2/hosts/?inventory=3&page_size=100"
         method: GET
-        headers:
-          Authorization: "Bearer {{ lookup('env', 'CONTROLLER_OAUTH_TOKEN') }}"
+        url_username: "{{ lookup('env', 'CONTROLLER_USERNAME') }}"
+        url_password: "{{ lookup('env', 'CONTROLLER_PASSWORD') }}"
+        force_basic_auth: true
         validate_certs: false
 
     - name: Remove stale demo hosts from AAP inventory
@@ -164,8 +165,9 @@
       ansible.builtin.uri:
         url: "{{ lookup('env', 'CONTROLLER_HOST') }}/api/controller/v2/hosts/{{ item.id }}/"
         method: DELETE
-        headers:
-          Authorization: "Bearer {{ lookup('env', 'CONTROLLER_OAUTH_TOKEN') }}"
+        url_username: "{{ lookup('env', 'CONTROLLER_USERNAME') }}"
+        url_password: "{{ lookup('env', 'CONTROLLER_PASSWORD') }}"
+        force_basic_auth: true
         validate_certs: false
         status_code: 204
 
