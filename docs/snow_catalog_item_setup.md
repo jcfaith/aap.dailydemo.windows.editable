@@ -18,6 +18,7 @@ Create a new catalog item in **Service Catalog → Maintain Items**.
 - **Name:** Windows VM Provisioning
 - **Category:** Your choice
 - **Approval:** Set to require approval before fulfillment
+- **Group:** Set to an approval group containing only yourself (e.g. create a new group via System Security → Groups, add yourself as the only member, then select it here). Without this, SNOW falls back to global approval groups and creates approver records for every member.
 
 ### Variables (create in this order)
 
@@ -58,7 +59,7 @@ Create a new catalog item in **Service Catalog → Maintain Items**.
 **Environment (`environment`)**
 | Label | Value |
 |---|---|
-| Daily Demo | `windows-dailydemo` |
+| Test | `windows-dailydemo` |
 | Development | `dev` |
 | Production | `prod` |
 
@@ -103,27 +104,76 @@ SaveRitmVariables.prototype = Object.extendsObject(AbstractAjaxProcessor, {
     var varsJson = this.getParameter("sysparm_variables_json");
     try {
       var vars = JSON.parse(varsJson);
-      var ritm = new GlideRecord("sc_req_item");
-      ritm.addQuery("sys_id", ritmSysId);
-      ritm.query();
-      if (!ritm.next()) {
-        return JSON.stringify({success: false, error: "RITM not found: " + ritmSysId});
+      var varNames = ["datacenter","windows_version","instance_type","vm_name","environment","contact_email","include_website"];
+
+      // Single pass: read originals, write new values, track what changed.
+      // Writing to sc_item_option directly avoids touching the RITM record,
+      // which would re-trigger the approval engine and create new approver batches.
+      var changedFields = [];
+      var unchangedFields = [];
+      var mtom = new GlideRecord("sc_item_option_mtom");
+      mtom.addQuery("request_item", ritmSysId);
+      mtom.query();
+      while (mtom.next()) {
+        var opt = mtom.sc_item_option.getRefRecord();
+        var nm = opt.item_option_new.name.toString();
+        if (vars.hasOwnProperty(nm)) {
+          var orig = opt.value.toString().trim();
+          var updated = vars[nm];
+          if (orig !== updated) {
+            changedFields.push({field: nm, from: orig, to: updated});
+          } else {
+            unchangedFields.push(nm);
+          }
+          opt.setValue("value", updated);
+          opt.update();
+        }
       }
-      for (var k in vars) { ritm.variables[k] = vars[k]; }
-      ritm.update();
+
+      // Build diff work note
+      var approverName = gs.getUser().getFullName();
+      var approverEmail = gs.getUser().getEmail();
+      var note = "Approval summary — " + approverName + " (" + approverEmail + ")\n\n";
+      if (changedFields.length > 0) {
+        note += "Variables changed before approval:\n";
+        for (var i = 0; i < changedFields.length; i++) {
+          note += "  " + changedFields[i].field + ": [" + changedFields[i].from + "] → [" + changedFields[i].to + "]\n";
+        }
+      } else {
+        note += "No variables were changed from the original request.\n";
+      }
+      if (unchangedFields.length > 0) {
+        note += "\nUnchanged: " + unchangedFields.join(", ");
+      }
+      note += "\n\nContact the approver at " + approverEmail + " with any questions.";
+
+      // Approve the current user's most recent pending approval record.
+      // Query by document_id — that is what the create-approval Business Rule sets.
+      // source_id matches old unrelated records across tables; document_id is correct.
+      var currentUserId = gs.getUserID();
       var appr = new GlideRecord("sysapproval_approver");
-      appr.addQuery("source_id", ritmSysId);
+      appr.addQuery("document_id", ritmSysId);
       appr.addQuery("state", "requested");
+      appr.addQuery("approver", currentUserId);
+      appr.orderByDesc("sys_created_on");
+      appr.setLimit(1);
       appr.query();
-      var count = 0;
-      while (appr.next()) {
-        appr.state = "approved";
-        appr.update();
-        count++;
+      if (!appr.next()) {
+        return JSON.stringify({success: false, error: "No pending approval found for current user"});
       }
-      if (count === 0) {
-        return JSON.stringify({success: false, error: "No pending approvals found"});
+      appr.state = "approved";
+      appr.update();
+
+      // Force RITM approval to approved and post the diff as a work note in one update.
+      // setWorkflow(false) prevents re-triggering the approval engine.
+      var ritm = new GlideRecord("sc_req_item");
+      if (ritm.get(ritmSysId)) {
+        ritm.setValue("approval", "approved");
+        ritm.setValue("work_notes", note);
+        ritm.setWorkflow(false);
+        ritm.update();
       }
+
       return JSON.stringify({success: true});
     } catch(e) {
       return JSON.stringify({success: false, error: String(e)});
@@ -136,7 +186,33 @@ SaveRitmVariables.prototype = Object.extendsObject(AbstractAjaxProcessor, {
 
 ---
 
-## 3. Business Rule — Trigger AAP on Approval
+## 3. Outbound REST Message — AAP Windows Demo Launch
+
+Navigate to **System Web Services → Outbound → REST Messages → New**.
+
+| Field | Value |
+|---|---|
+| Name | `AAP Windows Demo Launch` |
+| Endpoint | `https://<AAP_HOST>/api/controller/v2/` |
+| Authentication type | No authentication |
+
+Save, then open the **HTTP Methods** tab → **New**.
+
+| Field | Value |
+|---|---|
+| Name | `launch` |
+| Function name | `launch` |
+| HTTP method | POST |
+| Endpoint | `https://<AAP_HOST>/api/controller/v2/workflow_job_templates/<WORKFLOW_JOB_TEMPLATE_ID>/launch/` |
+| Content | `{"extra_vars": {"ticket_number": "${ticket_number}"}}` |
+
+**Leave the HTTP Request Headers tab completely empty.** Headers are set programmatically in the Business Rule. Any header added here will be merged with the code headers on every call — duplicates of Content-Type or Authorization cause HTTP 415 from AAP and silently kill the integration.
+
+Save the function.
+
+---
+
+## 4. Business Rule — Trigger AAP on Approval
 
 Navigate to **System Definition → Business Rules → New**.
 
@@ -151,32 +227,33 @@ Navigate to **System Definition → Business Rules → New**.
 | Update | ✓ |
 | Filter Condition | State = Approved |
 
-**Script** (replace `<AAP_HOST>`, `<WORKFLOW_JOB_TEMPLATE_ID>`, `<AAP_TOKEN>`):
+**Script** (replace `<CATALOG_ITEM_SYS_ID>` and `<AAP_TOKEN>`):
 ```javascript
 (function executeRule(current, previous) {
-    var ritm = new GlideRecord("sc_req_item");
-    if (!ritm.get(current.source_id)) { return; }
-    if (ritm.cat_item.sys_id.toString() !== "<CATALOG_ITEM_SYS_ID>") { return; }
-
-    var ritmNumber = ritm.getValue("number");
-    var endpoint = "https://<AAP_HOST>/api/controller/v2/workflow_job_templates/<WORKFLOW_JOB_TEMPLATE_ID>/launch/";
-    var body = {"extra_vars": {"ticket_number": ritmNumber}};
-
-    var req = new sn_ws.RESTMessageV2();
-    req.setEndpoint(endpoint);
-    req.setHttpMethod("POST");
-    req.setRequestHeader("Authorization", "Bearer <AAP_TOKEN>");
-    req.setRequestHeader("Content-Type", "application/json");
-    req.setRequestBody(JSON.stringify(body));
-    req.execute();
+    var ritmGr = new GlideRecord("sc_req_item");
+    if (!ritmGr.get(current.getValue("document_id"))) { return; }
+    if (ritmGr.getValue("cat_item") !== "<CATALOG_ITEM_SYS_ID>") { return; }
+    try {
+        var rm = new sn_ws.RESTMessageV2("AAP Windows Demo Launch", "launch");
+        rm.setStringParameterNoEscape("ticket_number", ritmGr.getValue("number"));
+        // Set headers in code, not in the REST Message UI.
+        // IMPORTANT: leave the REST Message Headers tab empty.
+        // Any stored headers merge with these and will cause HTTP 415.
+        rm.setRequestHeader("Content-Type", "application/json");
+        rm.setRequestHeader("Authorization", "Bearer <AAP_TOKEN>");
+        var response = rm.execute();
+        gs.log("AAP launched for " + ritmGr.getValue("number") + " | HTTP: " + response.getStatusCode(), "AAPIntegration");
+    } catch(e) {
+        gs.logError("AAP launch failed for " + ritmGr.getValue("number") + ": " + e.message, "AAPIntegration");
+    }
 })(current, previous);
 ```
 
-> Store the AAP token in a SNOW credential and retrieve it via `GlideCredentialResolver` rather than hardcoding it in production.
+> **Critical:** The REST Message "AAP Windows Demo Launch" must have **zero headers** in its UI (both at the message level and function level). Headers set via `setRequestHeader()` in the BR are merged with stored headers — duplicates cause HTTP 415. Generate an AAP token via `POST /api/controller/v2/tokens/` and put it here. The token created for this demo expires in 3025.
 
 ---
 
-## 4. UI Action — "Approve" Button on RITM Form
+## 5. UI Action — "Approve" Button on RITM Form
 
 Navigate to **System Definition → UI Actions → New**.
 
@@ -221,7 +298,7 @@ function editVarsRitm() {
 
 ---
 
-## 5. Verify the Setup
+## 6. Verify the Setup
 
 1. Submit a catalog item request
 2. Go to My Approvals → open the pending request
