@@ -148,25 +148,26 @@
         state: absent
 
     - name: Get all hosts in AAP Managed Inventory
-      register: inventory_hosts
-      awx.awx.host_info:
-        controller_host: "{{ lookup('env', 'CONTROLLER_HOST') }}"
-        controller_oauth_token: "{{ lookup('env', 'CONTROLLER_OAUTH_TOKEN') }}"
+      register: inventory_hosts_raw
+      ansible.builtin.uri:
+        url: "{{ lookup('env', 'CONTROLLER_HOST') }}/api/controller/v2/hosts/?inventory=3&page_size=100"
+        method: GET
+        headers:
+          Authorization: "Bearer {{ lookup('env', 'CONTROLLER_OAUTH_TOKEN') }}"
         validate_certs: false
-        inventory: AAP Managed Inventory
 
     - name: Remove stale demo hosts from AAP inventory
-      loop: "{{ inventory_hosts.hosts }}"
+      loop: "{{ inventory_hosts_raw.json.results }}"
       loop_control:
         label: "{{ item.name }}"
       when: "'compute.amazonaws.com' in item.name"
-      awx.awx.host:
-        controller_host: "{{ lookup('env', 'CONTROLLER_HOST') }}"
-        controller_oauth_token: "{{ lookup('env', 'CONTROLLER_OAUTH_TOKEN') }}"
+      ansible.builtin.uri:
+        url: "{{ lookup('env', 'CONTROLLER_HOST') }}/api/controller/v2/hosts/{{ item.id }}/"
+        method: DELETE
+        headers:
+          Authorization: "Bearer {{ lookup('env', 'CONTROLLER_OAUTH_TOKEN') }}"
         validate_certs: false
-        name: "{{ item.name }}"
-        inventory: AAP Managed Inventory
-        state: absent
+        status_code: 204
 
     - name: Summary
       loop: "{{ all_instances.results }}"
