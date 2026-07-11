@@ -106,9 +106,6 @@ SaveRitmVariables.prototype = Object.extendsObject(AbstractAjaxProcessor, {
       var vars = JSON.parse(varsJson);
       var varNames = ["datacenter","windows_version","instance_type","vm_name","environment","contact_email","include_website"];
 
-      // Single pass: read originals, write new values, track what changed.
-      // Writing to sc_item_option directly avoids touching the RITM record,
-      // which would re-trigger the approval engine and create new approver batches.
       var changedFields = [];
       var unchangedFields = [];
       var mtom = new GlideRecord("sc_item_option_mtom");
@@ -130,14 +127,13 @@ SaveRitmVariables.prototype = Object.extendsObject(AbstractAjaxProcessor, {
         }
       }
 
-      // Build diff work note
       var approverName = gs.getUser().getFullName();
       var approverEmail = gs.getUser().getEmail();
-      var note = "Approval summary — " + approverName + " (" + approverEmail + ")\n\n";
+      var note = "Approval summary - " + approverName + " (" + approverEmail + ")\n\n";
       if (changedFields.length > 0) {
         note += "Variables changed before approval:\n";
         for (var i = 0; i < changedFields.length; i++) {
-          note += "  " + changedFields[i].field + ": [" + changedFields[i].from + "] → [" + changedFields[i].to + "]\n";
+          note += "  " + changedFields[i].field + ": [" + changedFields[i].from + "] -> [" + changedFields[i].to + "]\n";
         }
       } else {
         note += "No variables were changed from the original request.\n";
@@ -147,9 +143,6 @@ SaveRitmVariables.prototype = Object.extendsObject(AbstractAjaxProcessor, {
       }
       note += "\n\nContact the approver at " + approverEmail + " with any questions.";
 
-      // Approve the current user's most recent pending approval record.
-      // Query by document_id — that is what the create-approval Business Rule sets.
-      // source_id matches old unrelated records across tables; document_id is correct.
       var currentUserId = gs.getUserID();
       var appr = new GlideRecord("sysapproval_approver");
       appr.addQuery("document_id", ritmSysId);
@@ -164,12 +157,19 @@ SaveRitmVariables.prototype = Object.extendsObject(AbstractAjaxProcessor, {
       appr.state = "approved";
       appr.update();
 
-      // Force RITM approval to approved and post the diff as a work note in one update.
-      // setWorkflow(false) prevents re-triggering the approval engine.
+      // Write diff directly to sys_journal_field so setWorkflow(false) below
+      // does not suppress it. Journal fields are not written when setWorkflow(false)
+      // is active on the parent record update.
+      var jf = new GlideRecord("sys_journal_field");
+      jf.setValue("name", "sc_req_item");
+      jf.setValue("element", "work_notes");
+      jf.setValue("element_id", ritmSysId);
+      jf.setValue("value", note);
+      jf.insert();
+
       var ritm = new GlideRecord("sc_req_item");
       if (ritm.get(ritmSysId)) {
         ritm.setValue("approval", "approved");
-        ritm.setValue("work_notes", note);
         ritm.setWorkflow(false);
         ritm.update();
       }
