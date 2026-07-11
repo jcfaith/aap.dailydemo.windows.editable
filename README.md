@@ -1,198 +1,166 @@
-Ansible Automation Platform Daily Demo for Windows — Editable RITM
-=========
+# AAP + ServiceNow: Windows VM Provisioning Demo
 
-## Overview
+## What This Demo Shows
 
-This demo shows end-to-end IT automation between Red Hat Ansible Automation Platform (AAP) and ServiceNow (SNOW). A user submits a **Windows VM Provisioning** Service Catalog Item in ServiceNow, choosing their datacenter (AWS region), instance type, Windows version, VM name, environment, and contact email. That request creates a RITM (Requested Item) and routes it to an approver. The approver can **edit any catalog variable directly on the RITM** before approving — fixing a wrong region, instance type, or VM name is as simple as updating the field and clicking Approve. Once approved, SNOW automatically triggers the AAP workflow via a REST call. AAP reads whatever values the approver saved, provisions the VPC and EC2 Windows instance in the correct AWS region, registers the VM in the CMDB, optionally sets up a web server, applies patches, and closes the RITM with a summary of what was built.
+A customer submits a **Windows VM Provisioning** request through the ServiceNow Service Catalog. That ticket routes to an approver who can adjust any field before approving — wrong region, wrong instance size, wrong VM name, no problem. One click to approve and Ansible Automation Platform automatically provisions a Windows EC2 instance in the correct AWS region, registers it in the CMDB, optionally deploys a web server, applies patches, and closes the ticket with a summary.
 
-To replicate this demo in your own environment you need: an AAP instance with access to AWS credentials, a ServiceNow developer or sandbox instance, and an AWS account. Start by syncing this project in AAP, running the Day 0 setup playbook (`setup_demo.yml`) to create all job templates and the workflow, then follow the [ServiceNow Catalog Item Setup Guide](docs/snow_catalog_item_setup.md) to create the catalog item, variables, approval business rules, and the outbound REST message that fires the AAP workflow on approval.
+**The point:** The customer never touches AWS. They fill out a form. AAP handles everything.
 
-New in this version
-=========
-- `DDW - Get Requested Item` — first workflow node; reads all catalog item variables from the SNOW RITM via `sc_item_option_mtom`
-- Region/datacenter selector drives `vm_region` for VPC + EC2 provisioning
-- Windows version selector drives AMI lookup per region
-- Instance type, VM name, environment, contact email, website toggle — all from catalog item
-- Edit-before-approval: approver edits RITM fields in SNOW before approving; AAP picks up the corrected values
+---
 
-[ServiceNow Catalog Item Setup Guide](docs/snow_catalog_item_setup.md)
+## Demo Flow (What to Show the Customer)
 
-Notes
-=========
-1. This demo is designed to work with the Red Hat Demo Platform. Please see the aap.as.code repo below. [aap.as.code](https://github.com/ericcames/aap.as.code "aap.as.code")
-2. This demo works with Amazon only currently.
-3. This demo works with ServiceNow.
+1. **Submit a request** — Go to ServiceNow → Service Catalog → Windows VM Provisioning. Fill in VM name, datacenter (AWS region), instance type, Windows version, environment, and email. Submit.
 
-Day 0 - Configuration as code (CAC) a repeatable build process for this demo
-=========
-Configuration as code give you an easy way to recover/move your ansible related artifacts to a new platform.  That includes your hardcoded credentials.  The hardcoded credentials can be safely vaulted in an ansible vault file.  Check out the setup_demo.yml for the configurations for setting up this demo using configuration as code.
+2. **Approve and optionally edit** — Go to My Approvals. Click the pending request. If any field needs to be corrected (e.g., the requester picked the wrong region), change it directly on the form. Click **Approve**. The button saves whatever values are on the form and approves the request in one click.
 
-[Setup - Windows Daily Demo - CAC](https://github.com/ericcames/aap.dailydemo.windows/blob/main/playbooks/setup_demo.yml "Setup - Windows Daily Demo - CAC")<br>
+3. **Watch AAP run** — In AAP, the workflow launches automatically. You can follow each job node in real time: VPC creation → instance provisioning → inventory registration → website setup → patching → CMDB update → ticket closure.
 
-Variables used in the setup template
+4. **Show the result** — The RITM in ServiceNow is closed with the instance hostname, IP address, and AMI ID. The web server (if selected) is reachable at the public IP.
+
+---
+
+## How It Works
+
 ```
-timezone_id: America/Phoenix
-my_vault: Eric Ames
-my_remote_vault: >-
-  https://raw.githubusercontent.com/ericcames/sourcefiles/refs/heads/main/vault_ames.yml
-my_remote_ssh_pub_key: >-
-  https://raw.githubusercontent.com/ericcames/sourcefiles/refs/heads/main/id_rsa.pub
+User submits catalog item in SNOW
+          │
+          ▼
+RITM created with catalog variables
+          │
+          ▼
+Approver opens My Approvals → edits any field → clicks Approve
+          │
+          ▼
+SNOW Business Rule fires → calls AAP REST API
+          │
+          ▼
+AAP workflow launches with ticket_number as the only input
+          │
+          ▼
+DDW - Get Requested Item reads the RITM and extracts all variables
+(picks up whatever the approver last saved)
+          │
+          ▼
+All downstream nodes receive: region, vm_name, instance_type,
+windows_version, environment, contact_email, include_website
+          │
+          ├── Create VPC + subnet + security group + IGW in target region
+          ├── Launch Windows EC2 instance with WinRM enabled via user_data
+          ├── Register instance in AAP inventory
+          ├── Wait for WinRM (port 5986) to respond
+          ├── Improve PowerShell execution environment
+          ├── Create Windows user account
+          ├── (optional) Deploy IIS website
+          ├── Apply Windows patches
+          ├── Create/update CMDB CI and relationship
+          └── Close RITM with hostname, IP, AMI ID
 ```
 
-Day 1 - Run workflow for the Windows Daily Demo
-=========
+---
 
-![alt text](https://github.com/ericcames/aap.dailydemo.windows/blob/main/images/windowswf.png "Start of workflow")
+## Catalog Item Variables
 
-**The playbooks**
+| Label | Name | Type | Options |
+|---|---|---|---|
+| Datacenter | `datacenter` | Select Box | US East (us-east-1), US West (us-west-2), EU Ireland (eu-west-1), AP Singapore (ap-southeast-1) |
+| VM Name | `vm_name` | Single Line Text | e.g. `customer-demo-vm` |
+| Instance Type | `instance_type` | Select Box | t3.medium, t3.large, m5.large, m5.xlarge |
+| Windows Version | `windows_version` | Select Box | 2022, 2019 |
+| Environment | `environment` | Select Box | windows-dailydemo, dev, prod |
+| Contact Email | `contact_email` | Single Line Text | Applied as EC2 Contact tag |
+| Include Website Setup | `include_website` | Checkbox | Default: yes |
 
-![alt text](https://github.com/ericcames/aap.dailydemo.windows/blob/main/images/ddwtemps.png "The job templates")
+---
 
-[Site Delete will clean everything up](https://github.com/ericcames/aap.dailydemo.windows/blob/main/playbooks/site_delete.yml "site_delete.yml")<br>
+## Cost Management
 
-ServiceNow
-========
+Run the **Cleanup All Demo Instances** job template in AAP to terminate all demo EC2 instances and tear down all VPC resources across all four supported regions (us-east-1, us-west-2, eu-west-1, ap-southeast-1). Run it as often as needed — it is safe to run with no instances present.
 
-**The playbooks**
+---
 
-[Create a CMDB record](https://github.com/ericcames/aap.dailydemo.windows/blob/main/playbooks/servicenow/create_ci.yml "create_ci.yml") <br>
-[Create a CMDB relationship](https://github.com/ericcames/aap.dailydemo.windows/blob/main/playbooks/servicenow/create_cmdb_relationship.yml "create_cmdb_relationship.yml") <br>
-[Create incident ticket](https://github.com/ericcames/aap.dailydemo.windows/blob/main/playbooks/servicenow/incident_create.yml "incident_create.yml") <br>
-[Update requested item ticket](https://github.com/ericcames/aap.dailydemo.windows/blob/main/playbooks/servicenow/update_sn_req_itm.yml "update_sn_req_itm.yml") <br>
+## Day 2 Operations
 
-ServiceNow credential<br>
-Input configuration
+After provisioning, the following job templates are available to demonstrate ongoing management:
+
+- **Audit** — Scans registry entries and repairs drift. Documents results in a CSV.
+- **Patching** — Survey-driven Windows patching with optional reboot.
+- **.NET Patch Report** — Inventory of installed .NET versions.
+- **SMB Server** — Configure a Windows file share.
+- **Update IMDSv2** — Harden the instance metadata service.
+- **Gather Facts** — Ad hoc fact collection for any inventory host.
+
+---
+
+## AAP Credentials Required
+
+| Credential Type | Used For |
+|---|---|
+| AWS | EC2, VPC, ENI, IGW operations |
+| Machine (Windows) | WinRM connection to provisioned instance |
+| ServiceNow | CMDB CI creation, RITM update, incident management |
+| Red Hat Ansible Automation Platform | Inventory registration via REST API |
+
+---
+
+## ServiceNow Setup
+
+See [docs/snow_catalog_item_setup.md](docs/snow_catalog_item_setup.md) for the full guide to setting up:
+- The catalog item and its 7 variables
+- The approval configuration
+- The Business Rule that triggers the AAP workflow on approval
+- The Script Include (`SaveRitmVariables`) that powers the edit-before-approval button
+- The `Approve` UI Action on the RITM form
+
+---
+
+## Automated Incident Management
+
+If any job node in the workflow fails, AAP captures the error message, job ID, and template name, then opens a ServiceNow incident automatically with full context — no manual ticket creation required.
+
+```yaml
+- name: Run task with incident handling
+  block:
+    - name: Your task here
+      ...
+  rescue:
+    - name: Capture error details
+      ansible.builtin.set_stats:
+        data:
+          my_error: "{{ ansible_failed_result.msg }}"
+          my_job_id: "{{ tower_job_id }}"
+          my_job_template_name: "{{ tower_job_template_name }}"
+    - ansible.builtin.fail:
+        msg: failing so we create the incident ticket
 ```
+
+---
+
+## ServiceNow Credential (AAP Custom Credential Type)
+
+Input configuration:
+```yaml
 fields:
   - id: instance
     type: string
     label: Instance
   - id: username
     type: string
-    label: username
+    label: Username
   - id: password
     type: string
-    label: password
+    label: Password
     secret: true
 required:
   - instance
   - username
   - password
 ```
-Injector configuration
-```
+
+Injector configuration:
+```yaml
 env:
   SN_HOST: '{{instance}}'
-  SN_PASSWORD: '{{password}}'
   SN_USERNAME: '{{username}}'
+  SN_PASSWORD: '{{password}}'
 ```
-
-- Automated incident management example
-
-[Example Error Handling in support of incident enrichment](https://github.com/ericcames/aap.dailydemo.windows/blob/main/roles/vm/tasks/main.yml "Example Error Handling") <br>
-[Youtube video on Automated Incident enrichment](https://youtu.be/ieO-cbzNqjU?si=z28o3rpAgLTDqdnB "Youtube video on Automated Incident enrichment") <br>
-
-```
-- name: Adding incident management error handling
-  block:
-
-    PUT YOUR TASKS HERE
-
-  rescue:
-
-    - name: Capture the error message
-      register: my_error
-      ansible.builtin.set_stats:
-        data:
-          my_error: "{{ ansible_failed_result.msg }}"
-
-    - name: Capture the Job ID
-      register: my_job_id
-      ansible.builtin.set_stats:
-        data:
-          my_job_id: "{{ tower_job_id }}"
-
-    - name: Capture the Job Template name
-      register: my_job_template_name
-      ansible.builtin.set_stats:
-        data:
-          my_job_template_name: "{{ tower_job_template_name }}"
-
-    - name: Fail the job even though the rescue worked
-      ansible.builtin.fail:
-        msg: failing so we create the incident ticket
-```
-# The website
-
-![alt text](https://github.com/ericcames/aap.dailydemo.windows/blob/main/images/windowsweb1.png "Webtop")
-![alt text](https://github.com/ericcames/aap.dailydemo.windows/blob/main/images/windowsweb2.png "Webbottom")
-
-# A youtube video of the demo
-
-- [AAP Daily Demo Windows](https://youtu.be/RNwel6BeCVI?si=ruIwcDFp6dyyAkjO "AAP Daily Demo Windows")
-
-
-# Important Note
-The user_data line in the task listed below is designed to work with a template to set the password on the machine as it is built.  It works with a machine credential in the ansible automation platform.
-
-![alt text](https://github.com/ericcames/aap.dailydemo.windows/blob/main/images/windowsmachinecred.png "Windows Machine Credential")
-
-[Windows Machine Instance Creation](https://github.com/ericcames/aap.dailydemo.windows/blob/main/roles/vm/tasks/main.yml "Windows Machine Instance Creation")<br>
-```
-- name: "Creating AWS VMs in {{ region }}"
-      register: instance
-      amazon.aws.ec2_instance:
-        name: "Windows Daily Demo"
-        state: running
-        region: "{{ region }}"
-        key_name: "{{ my_ssh_key }}"
-        vpc_subnet_id: "{{ vpc_subnet_id }}"
-        instance_type: "{{ instance_type }}"
-        security_group: "{{ ec2_security_group_name }}"
-        network:
-          assign_public_ip: "{{ assign_public_ip }}"
-        image_id: "{{ image }}"
-        tags:
-          Environment: windows-dailydemo
-          AlwaysUp: "{{ alwaysup }}"
-          Createdby: Ansible Controller
-          Contact: "{{ my_email_address }}"
-          DeletebBy: "{{ ec2_ansible_group }}"
-          info: "This instance was built by the Sales Team"
-        user_data: "{{ lookup('template', 'scripts/aws_userdata') }}"
-        wait: true
-        wait_timeout: 600
-```
-# Day 2 Operations
-![alt text](https://github.com/ericcames/aap.dailydemo.windows/blob/main/images/winday2.png "Windows Day 2")
-**Audit**<br>
-Audit registry entries and repair if needed.  Document the work in a CSV file.<br>
-[Audit](https://github.com/ericcames/aap.dailydemo.windows/blob/main/playbooks/auditme.yml "auditme.yml") <br>
-![alt text](https://github.com/ericcames/aap.dailydemo.windows/blob/main/images/winaudit1.png "Fixed")
-![alt text](https://github.com/ericcames/aap.dailydemo.windows/blob/main/images/winaudit2.png "Good")
-
-**Patching**<br>
-We are using a survey to select what windows patches we want to apply as well as whether or not to reboot the machine.<br>
-[Patching](https://github.com/ericcames/aap.dailydemo.windows/blob/main/playbooks/windows_patching_07.yml "windows_patching_07.yml") <br>
-![alt text](https://github.com/ericcames/aap.dailydemo.windows/blob/main/images/winpatch1.png "surveytop")
-![alt text](https://github.com/ericcames/aap.dailydemo.windows/blob/main/images/winpatch2.png "surveybottom")
-
-# Adhoc windows commands
-```
-win_ping
-win_shell -> Get-Service
-win_shell -> Get-Process
-setup
-win_shell -> Add-WindowsCapability -Online -Name OpenSSH.Server
-win_shell -> Start-Service sshd
-win_shell -> Set-Service -Name sshd -StartupType ‘Automatic’
-win_service -> name=sshd
-```
-Looking for other Daily Demos?
-=========
-
-- [AAP Daily Demo Windows](https://github.com/ericcames/aap.dailydemo.windows "AAP Daily Demo Windows")
-- [AAP Daily Demo Linux](https://github.com/ericcames/aap.dailydemo.linux "AAP Daily Demo Linux")
-- [AAP Daily Demo F5](https://github.com/ericcames/aap.dailydemo.F5 "AAP Daily Demo F5")
-- [AAP Daily Demo Panos](https://github.com/ericcames/aap.dailydemo.Panos "AAP Daily Demo Panos")
-- [AAP Daily Demo Satellite](https://github.com/ericcames/aap.dailydemo.satellite "AAP Daily Demo Satellite")
