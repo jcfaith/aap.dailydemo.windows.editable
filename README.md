@@ -1,5 +1,16 @@
 # AAP + ServiceNow: Windows VM Provisioning Demo
 
+> **Based on [Eric Ames' AAP Daily Demo for Windows](https://github.com/ericcames/aap.dailydemo.windows).** All credit for the core demo goes to Eric. This repo is a fork with the following additions and changes on top of his original work:
+>
+> - **Select box dropdowns on catalog item variables** — Datacenter, Instance Type, Windows Version, and Environment are now dropdown menus instead of free-text fields, reducing input errors during demos.
+> - **Edit-before-approve on the RITM form** — An `Approve` button on the ServiceNow Requested Item form lets the approver change any variable (region, instance size, etc.) and approve in one click, without a separate edit step.
+> - **Approval summary in the ticket** — When the approver clicks Approve, a work note is posted showing the original request variables, the approved variables, what changed, and who to contact. This summary is pulled by AAP and appended to the final ticket closure comment.
+> - **Catalog item description** — Added an HTML-formatted description on the Service Catalog item explaining the workflow to end users.
+> - **Inventory cleanup in the cleanup job** — The `DDW - Cleanup All Demo Instances` job now removes stale EC2 hosts from the AAP inventory after terminating the AWS instances, so repeated demo runs don't accumulate unreachable hosts.
+> - **SNOW setup guide** — Added `docs/snow_catalog_item_setup.md` with step-by-step instructions for recreating all ServiceNow components from scratch.
+
+---
+
 ## Overview
 
 This demo shows end-to-end IT automation between Red Hat Ansible Automation Platform (AAP) and ServiceNow. A user submits a **Windows VM Provisioning** request through the ServiceNow Service Catalog. The request routes to an approver who can adjust any variable before approving — wrong region, wrong instance size, wrong VM name, all correctable inline. On approval, AAP automatically provisions a Windows EC2 instance in the correct AWS region, registers it in the CMDB, optionally deploys a web server, applies patches, and closes the ticket with a summary.
@@ -65,7 +76,7 @@ windows_version, environment, contact_email, include_website
 | VM Name | `vm_name` | Single Line Text | e.g. `customer-demo-vm` |
 | Instance Type | `instance_type` | Select Box | t3.medium, t3.large, m5.large, m5.xlarge |
 | Windows Version | `windows_version` | Select Box | 2022, 2019 |
-| Environment | `environment` | Select Box | windows-dailydemo, dev, prod |
+| Environment | `environment` | Select Box | Test (windows-dailydemo), dev, prod |
 | Contact Email | `contact_email` | Single Line Text | Applied as EC2 Contact tag |
 | Include Website Setup | `include_website` | Checkbox | Default: yes |
 
