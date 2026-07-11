@@ -147,6 +147,27 @@
         vpc_id: "{{ vpc_ids_by_region[item] }}"
         state: absent
 
+    - name: Get all hosts in AAP Managed Inventory
+      register: inventory_hosts
+      awx.awx.host_info:
+        controller_host: "{{ lookup('env', 'CONTROLLER_HOST') }}"
+        controller_oauth_token: "{{ lookup('env', 'CONTROLLER_OAUTH_TOKEN') }}"
+        validate_certs: false
+        inventory: AAP Managed Inventory
+
+    - name: Remove stale demo hosts from AAP inventory
+      loop: "{{ inventory_hosts.hosts }}"
+      loop_control:
+        label: "{{ item.name }}"
+      when: "'compute.amazonaws.com' in item.name"
+      awx.awx.host:
+        controller_host: "{{ lookup('env', 'CONTROLLER_HOST') }}"
+        controller_oauth_token: "{{ lookup('env', 'CONTROLLER_OAUTH_TOKEN') }}"
+        validate_certs: false
+        name: "{{ item.name }}"
+        inventory: AAP Managed Inventory
+        state: absent
+
     - name: Summary
       loop: "{{ all_instances.results }}"
       ansible.builtin.debug:
