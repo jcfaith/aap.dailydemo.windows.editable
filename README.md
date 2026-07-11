@@ -1,22 +1,20 @@
 # AAP + ServiceNow: Windows VM Provisioning Demo
 
-## What This Demo Shows
+## Overview
 
-A customer submits a **Windows VM Provisioning** request through the ServiceNow Service Catalog. That ticket routes to an approver who can adjust any field before approving — wrong region, wrong instance size, wrong VM name, no problem. One click to approve and Ansible Automation Platform automatically provisions a Windows EC2 instance in the correct AWS region, registers it in the CMDB, optionally deploys a web server, applies patches, and closes the ticket with a summary.
-
-**The point:** The customer never touches AWS. They fill out a form. AAP handles everything.
+This demo shows end-to-end IT automation between Red Hat Ansible Automation Platform (AAP) and ServiceNow. A user submits a **Windows VM Provisioning** request through the ServiceNow Service Catalog. The request routes to an approver who can adjust any variable before approving — wrong region, wrong instance size, wrong VM name, all correctable inline. On approval, AAP automatically provisions a Windows EC2 instance in the correct AWS region, registers it in the CMDB, optionally deploys a web server, applies patches, and closes the ticket with a summary.
 
 ---
 
-## Demo Flow (What to Show the Customer)
+## Demo Flow
 
 1. **Submit a request** — Go to ServiceNow → Service Catalog → Windows VM Provisioning. Fill in VM name, datacenter (AWS region), instance type, Windows version, environment, and email. Submit.
 
 2. **Approve and optionally edit** — Go to My Approvals. Click the pending request. If any field needs to be corrected (e.g., the requester picked the wrong region), change it directly on the form. Click **Approve**. The button saves whatever values are on the form and approves the request in one click.
 
-3. **Watch AAP run** — In AAP, the workflow launches automatically. You can follow each job node in real time: VPC creation → instance provisioning → inventory registration → website setup → patching → CMDB update → ticket closure.
+3. **AAP runs the workflow** — The workflow launches automatically. Each job node is visible in real time: VPC creation → instance provisioning → inventory registration → website setup → patching → CMDB update → ticket closure.
 
-4. **Show the result** — The RITM in ServiceNow is closed with the instance hostname, IP address, and AMI ID. The web server (if selected) is reachable at the public IP.
+4. **Review the result** — The RITM in ServiceNow is closed with the instance hostname, IP address, and AMI ID. The web server (if selected) is reachable at the public IP.
 
 ---
 
