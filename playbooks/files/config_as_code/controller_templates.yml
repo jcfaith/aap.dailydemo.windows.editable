@@ -116,7 +116,8 @@ controller_templates:
                                               AWS AMI ID: {{ my_ami_id }}\n
                                               AWS Instance ID: {{ my_instance_id }}\n
                                               AWS Instance Type: {{ my_instance_type }}\n
-                                              AWS availability zone: {{ my_availability_zone }}"
+                                              AWS availability zone: {{ my_availability_zone }}\n
+                                              \n---\n{{ approval_diff }}"
       update_requested_item_state: "3"
 
   - name: DDW - Update request ticket - failure

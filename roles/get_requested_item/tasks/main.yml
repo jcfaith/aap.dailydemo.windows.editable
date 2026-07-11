@@ -42,6 +42,16 @@
       ansible.builtin.debug:
         var: ritm_variables
 
+    - name: Get approval diff work note posted by approver
+      register: approval_notes_result
+      servicenow.itsm.api_info:
+        resource: sys_journal_field
+        sysparm_query: "element=work_notes^name=sc_req_item^element_id={{ ritm_result.record[0].sys_id }}^valueSTARTSWITHApproval summary"
+        columns:
+          - value
+          - sys_created_on
+        sysparm_limit: 1
+
     - name: Share RITM variables with downstream workflow nodes
       ansible.builtin.set_stats:
         data:
@@ -53,3 +63,4 @@
           vm_image: "{{ get_requested_item_ami_map[ritm_variables.get('windows_version', get_requested_item_default_windows_version)][ritm_variables.get('datacenter', get_requested_item_default_region)] }}"
           vm_my_email_address: "{{ ritm_variables.get('contact_email', get_requested_item_default_email) }}"
           include_website_setup: "{{ ritm_variables.get('include_website', 'yes') }}"
+          approval_diff: "{{ (approval_notes_result.record | first).value if approval_notes_result.record | length > 0 else 'No approval summary recorded.' }}"

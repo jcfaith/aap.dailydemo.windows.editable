@@ -6,8 +6,10 @@
 |---|---|---|
 | Catalog Item | `sc_cat_item` | The 7-variable request form users fill out |
 | Script Include | `sys_script_include` | `SaveRitmVariables` — reads and saves RITM variables from client scripts |
-| Business Rule | `sys_script` | Fires on `sysapproval_approver` approval → calls AAP REST API |
-| UI Action | `sys_ui_action` | "Approve" button on the RITM form — saves edits and approves in one click |
+| Outbound REST Message | `sys_rest_message` | `AAP Windows Demo Launch` — POSTs to AAP workflow launch endpoint |
+| Business Rule | `sys_script` | `AAP - Create Approval for Windows Demo R` — creates one approval record on RITM insert |
+| Business Rule | `sys_script` | `AAP - Update RITM on Approval` — fires on approval → calls AAP REST API |
+| UI Action | `sys_ui_action` | `Approve` — button on RITM form, saves variable edits and approves in one click |
 
 ---
 
@@ -252,7 +254,43 @@ Save the function.
 
 ---
 
-## 4. Business Rule — Trigger AAP on Approval
+## 4. Business Rule — Create Approval Record on RITM Insert
+
+Navigate to **System Definition → Business Rules → New**.
+
+| Field | Value |
+|---|---|
+| Name | `AAP - Create Approval for Windows Demo R` |
+| Table | `Requested Item [sc_req_item]` |
+| Active | ✓ |
+| Advanced | ✓ |
+| When | After |
+| Insert | ✓ |
+| Update | — |
+| Filter Condition | _(none)_ |
+
+**Script** (replace `<CATALOG_ITEM_SYS_ID>` and `<APPROVER_SYS_ID>`):
+```javascript
+(function executeRule(current, previous) {
+    if (current.cat_item != "<CATALOG_ITEM_SYS_ID>") { return; }
+    var appr = new GlideRecord("sysapproval_approver");
+    appr.setValue("sysapproval", current.sys_id);
+    appr.setValue("document_id", current.sys_id);
+    appr.setValue("approver", "<APPROVER_SYS_ID>");
+    appr.setValue("source_table", "sc_req_item");
+    appr.setValue("state", "requested");
+    appr.insert();
+    current.setValue("request_state", "pending_approval");
+    current.update();
+    gs.log("Approval created for RITM: " + current.number, "AAPIntegration");
+})(current, previous);
+```
+
+> `<APPROVER_SYS_ID>` is the `sys_id` of the user who will approve requests (the demo presenter). Find it at **System Administration → Users**, open your user record, and copy the sys_id from the URL. This creates exactly one approval record per RITM so only you appear in My Approvals.
+
+---
+
+## 5. Business Rule — Trigger AAP on Approval
 
 Navigate to **System Definition → Business Rules → New**.
 
@@ -293,7 +331,7 @@ Navigate to **System Definition → Business Rules → New**.
 
 ---
 
-## 5. UI Action — "Approve" Button on RITM Form
+## 6. UI Action — "Approve" Button on RITM Form
 
 Navigate to **System Definition → UI Actions → New**.
 
@@ -338,7 +376,7 @@ function editVarsRitm() {
 
 ---
 
-## 6. Verify the Setup
+## 7. Verify the Setup
 
 1. Submit a catalog item request
 2. Go to My Approvals → open the pending request
