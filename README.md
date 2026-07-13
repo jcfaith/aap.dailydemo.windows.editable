@@ -112,6 +112,19 @@ After provisioning, the following job templates are available to demonstrate ong
 
 ---
 
+## AAP Setup
+
+See [docs/aap_setup.md](docs/aap_setup.md) for the full guide to setting up:
+- Organization, project, and inventories
+- Custom ServiceNow ITSM credential type
+- All four credentials (AWS, Machine/WinRM, ServiceNow, AAP self-referential)
+- Execution environments
+- All 14 job templates with correct inventories, EEs, and credentials
+- The workflow job template and its node graph
+- The long-lived AAP API token for ServiceNow to trigger the workflow
+
+---
+
 ## ServiceNow Setup
 
 See [docs/snow_catalog_item_setup.md](docs/snow_catalog_item_setup.md) for the full guide to setting up:
