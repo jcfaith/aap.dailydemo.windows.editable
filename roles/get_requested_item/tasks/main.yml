@@ -46,11 +46,10 @@
       register: approval_notes_result
       servicenow.itsm.api_info:
         resource: sys_journal_field
-        sysparm_query: "element=work_notes^name=sc_req_item^element_id={{ ritm_result.record[0].sys_id }}^valueSTARTSWITHApproval summary"
+        sysparm_query: "element=work_notes^name=sc_req_item^element_id={{ ritm_result.record[0].sys_id }}^valueSTARTSWITHApproval summary^ORDERBYDESCsys_created_on"
         columns:
           - value
           - sys_created_on
-        sysparm_limit: 1
 
     - name: Share RITM variables with downstream workflow nodes
       ansible.builtin.set_stats:
