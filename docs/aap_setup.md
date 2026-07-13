@@ -185,28 +185,28 @@ All templates use **Organization** = your org and **Project** = `aap.dailydemo.w
 
 ### Workflow node templates
 
-| Name | Playbook | Inventory | Execution Environment | Credentials |
-|---|---|---|---|---|
-| `DDW - Get Requested Item` | `playbooks/servicenow/get_requested_item.yml` | AAP Managed Inventory | Default execution environment | ServiceNow ITSM Credential |
-| `DDW - Network Create` | `playbooks/01_create_vpc.yml` | AAP Managed Inventory | amazon_aws_ee | AWS, ServiceNow ITSM Credential |
-| `DDW - VM Create` | `playbooks/02_create_instance.yml` | AAP Managed Inventory | amazon_aws_ee | AWS, Daily Demo Windows |
-| `DDW - Inventory Update` | `playbooks/03_create_inventory.yml` | AAP Managed Inventory | amazon_aws_ee | AAP Credential, AWS |
-| `DDW - Get Instance Info` | `playbooks/04_get_instance_info.yml` | AAP Managed Inventory | amazon_aws_ee | AWS |
-| `DDW - Powershell Improvement` | `playbooks/05_powershell_improve.yml` | AAP Managed Inventory | windows workshop execution environment | Daily Demo Windows |
-| `DDW - Website Setup` | `playbooks/06_website_setup.yml` | AAP Managed Inventory | Default execution environment | Daily Demo Windows |
-| `DDW - Provision Access` | `playbooks/06_windows_account_create.yml` | AAP Managed Inventory | Default execution environment | Daily Demo Windows |
-| `DDW - Patching` | `playbooks/07_windows_patching.yml` | AAP Managed Inventory | windows workshop execution environment | Daily Demo Windows |
-| `DDW - Create a CMDB record` | `playbooks/servicenow/create_ci.yml` | AAP Managed Inventory | Default execution environment | ServiceNow ITSM Credential |
-| `DDW - Create CMDB relationship` | `playbooks/servicenow/create_cmdb_relationship.yml` | AAP Managed Inventory | Default execution environment | ServiceNow ITSM Credential |
-| `DDW - Create Incident` | `playbooks/servicenow/incident_create.yml` | AAP Managed Inventory | Default execution environment | ServiceNow ITSM Credential |
-| `DDW - Update request ticket - success` | `playbooks/servicenow/update_sn_req_itm.yml` | AAP Managed Inventory | Default execution environment | ServiceNow ITSM Credential |
-| `DDW - Update request ticket - failure` | `playbooks/servicenow/update_sn_req_itm.yml` | AAP Managed Inventory | Default execution environment | ServiceNow ITSM Credential |
+| Name | What it does | Playbook | Inventory | Execution Environment | Credentials |
+|---|---|---|---|---|---|
+| `DDW - Get Requested Item` | Reads the SNOW RITM and extracts all catalog variables (region, VM name, instance type, Windows version, environment, email, website flag). Passes them as workflow stats to every downstream node. Also fetches the approver's diff note for the final ticket comment. | `playbooks/servicenow/get_requested_item.yml` | AAP Managed Inventory | Default execution environment | ServiceNow ITSM Credential |
+| `DDW - Network Create` | Creates VPC, subnet, internet gateway, security group, and route table in the target AWS region. Posts a work note to the RITM when networking is ready. | `playbooks/01_create_vpc.yml` | AAP Managed Inventory | amazon_aws_ee | AWS, ServiceNow ITSM Credential |
+| `DDW - VM Create` | Launches a Windows EC2 instance in the VPC with WinRM enabled via user_data. Tags the instance with the environment, VM name, and contact email. Waits for the instance to reach running state. | `playbooks/02_create_instance.yml` | AAP Managed Inventory | amazon_aws_ee | AWS, Daily Demo Windows |
+| `DDW - Inventory Update` | Adds the new EC2 instance to `AAP Managed Inventory` with its public DNS name and WinRM connection variables. Also waits for WinRM (port 5986) to become reachable so subsequent nodes can connect. | `playbooks/03_create_inventory.yml` | AAP Managed Inventory | amazon_aws_ee | AAP Credential, AWS |
+| `DDW - Get Instance Info` | Queries AWS for the instance's public IP, hostname, and AMI ID. Passes these as workflow stats so the CMDB and ticket nodes have accurate instance details. | `playbooks/04_get_instance_info.yml` | AAP Managed Inventory | amazon_aws_ee | AWS |
+| `DDW - Powershell Improvement` | Connects to the Windows host and applies PowerShell configuration improvements (execution policy, module paths, NuGet provider). Required before any other WinRM playbooks can run reliably. | `playbooks/05_powershell_improve.yml` | AAP Managed Inventory | windows workshop execution environment | Daily Demo Windows |
+| `DDW - Website Setup` | Installs IIS and deploys a demo landing page on the Windows host. Only runs when `include_website` was set to true in the catalog request. | `playbooks/06_website_setup.yml` | AAP Managed Inventory | Default execution environment | Daily Demo Windows |
+| `DDW - Provision Access` | Creates a local Windows user account on the provisioned VM for demo access. | `playbooks/06_windows_account_create.yml` | AAP Managed Inventory | Default execution environment | Daily Demo Windows |
+| `DDW - Patching` | Runs Windows Update on the provisioned VM and optionally reboots. Last node before ticket closure. | `playbooks/07_windows_patching.yml` | AAP Managed Inventory | windows workshop execution environment | Daily Demo Windows |
+| `DDW - Create a CMDB record` | Creates a Configuration Item (CI) in the ServiceNow CMDB for the provisioned Windows server, populated with hostname, IP, OS version, and environment. | `playbooks/servicenow/create_ci.yml` | AAP Managed Inventory | Default execution environment | ServiceNow ITSM Credential |
+| `DDW - Create CMDB relationship` | Links the new CMDB CI to the business application it supports, establishing the parent-child relationship in the CMDB. | `playbooks/servicenow/create_cmdb_relationship.yml` | AAP Managed Inventory | Default execution environment | ServiceNow ITSM Credential |
+| `DDW - Create Incident` | Opens a ServiceNow incident automatically if `DDW - VM Create` fails. Populates the incident with the AAP job ID, template name, and error message so no manual ticket creation is needed. | `playbooks/servicenow/incident_create.yml` | AAP Managed Inventory | Default execution environment | ServiceNow ITSM Credential |
+| `DDW - Update request ticket - success` | Closes the RITM with a success work note containing the instance hostname, public IP, AMI ID, and the approver's variable diff summary. | `playbooks/servicenow/update_sn_req_itm.yml` | AAP Managed Inventory | Default execution environment | ServiceNow ITSM Credential |
+| `DDW - Update request ticket - failure` | Updates the RITM with a failure work note when the incident path is taken, linking back to the incident ticket. | `playbooks/servicenow/update_sn_req_itm.yml` | AAP Managed Inventory | Default execution environment | ServiceNow ITSM Credential |
 
 ### Cleanup template
 
-| Name | Playbook | Inventory | Execution Environment | Credentials |
-|---|---|---|---|---|
-| `DDW - Cleanup All Demo Instances` | `playbooks/cleanup_all_demo_instances.yml` | **Demo Inventory** | amazon_aws_ee | AAP Credential, AWS |
+| Name | What it does | Playbook | Inventory | Execution Environment | Credentials |
+|---|---|---|---|---|---|
+| `DDW - Cleanup All Demo Instances` | Terminates all demo EC2 instances and tears down VPCs, subnets, IGWs, route tables, and security groups across all four supported regions (us-east-1, us-west-2, eu-west-1, ap-southeast-1). Also removes the terminated hosts from AAP Managed Inventory so stale entries don't accumulate across demo runs. Safe to run repeatedly and with no instances present. | `playbooks/cleanup_all_demo_instances.yml` | **Demo Inventory** | amazon_aws_ee | AAP Credential, AWS |
 
 > **Cleanup must use Demo Inventory (localhost), not AAP Managed Inventory.** If it runs against AAP Managed Inventory it holds a lock on that inventory while deleting hosts from it, causing HTTP 409 errors on the host deletion API calls.
 
