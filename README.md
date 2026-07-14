@@ -66,6 +66,12 @@ windows_version, environment, contact_email, include_website
           └── Close RITM with hostname, IP, AMI ID
 ```
 
+### Why no Event-Driven Ansible (EDA)
+
+This demo does **not** use EDA Rulebook Activations to trigger the workflow. The ServiceNow Business Rule calls the AAP workflow launch endpoint directly via REST API when the RITM is approved — a simpler, more reliable path for a demo environment with a single, well-defined trigger condition (approval state change).
+
+EDA is built for scenarios with multiple event sources, complex conditional matching, or reacting to events AAP itself didn't initiate. None of that applies here — there's exactly one trigger (SNOW approval) and one action (launch workflow 55), so a direct REST call is the more predictable choice. It also means workflow execution is fully decoupled from EDA — if a Rulebook Activation elsewhere in the environment shows an error, it has no effect on this demo, since nothing here depends on it.
+
 ---
 
 ## Catalog Item Variables
